@@ -1,0 +1,50 @@
+TENDRIL — MICROSOFT STORE SUBMISSION NOTES (cert R10, build #147)
+================================================================
+
+Product name (reserved):  Tendril
+Package identity:         ViralHostDigital.Tendril
+Store product ID:         9NRC4P6JQ962
+Version submitted:        1.0.159
+Result:                   APPROVED (R10). Rounds R2 through R10 all approved with remediations.
+
+Field limits confirmed on learn.microsoft.com:
+  Description        10,000 chars, PLAIN TEXT ONLY (line breaks render; markdown does not)
+  Short description  1,000 chars — front-load, most Store views truncate around 270
+  Product features   up to 20 entries, 200 chars each, auto-bulleted
+
+CERT HISTORY
+------------
+R7 rejected on two clauses, both tied to Node.js:
+  10.2.4.1  Security — Software Dependencies. Undisclosed dependency on non-integrated software.
+  10.1.5    Software Distribution. Promoting acquisition of software outside the Store
+            ("Install Node.js").
+
+Build #132 fixed both at the engineering layer rather than in the listing copy:
+  - Node.js 22 LTS bundled inside the APPX as a portable runtime (vendor/node/). It is integrated
+    now, so it is no longer a non-integrated dependency.
+  - Every "Install Node.js" affordance removed from the app. Dashboard, Provider Picker,
+    Live Preview and Final Row no longer surface Node install actions.
+
+R8 rejected on 10.8 (monetization). Redesigned: the app hands off to web checkout through a
+single-use JWT nonce instead of transacting in-app.
+
+R10 update on 10.8.4: added a plain-language description of the free plan's usage limits and that
+it is a permanent free plan, NOT a time-limited trial. No dollar amounts in the listing (keeps
+10.1.4.3 clean). The reviewer had read the in-app usage meter as a trial.
+
+SHORT DESCRIPTION (as submitted)
+--------------------------------
+Describe what you want, and a whole team of AI builds it while you watch — then checks its own work,
+so you get more than a rough first draft. And Tendril remembers every project you make, so each new
+one starts smarter, not from scratch. Bring the AI you already trust — Claude, GPT, or Gemini.
+Everything stays on your own computer.
+
+SIGNING
+-------
+APPX signed for Store submission; NSIS installer signed separately with auto-update via S3
+(s3://tendril-releases). Clean-VM verification runs in Windows Sandbox before every submission.
+
+LISTING URL
+-----------
+https://apps.microsoft.com/detail/9NRC4P6JQ962
+https://tendrilapp.ai

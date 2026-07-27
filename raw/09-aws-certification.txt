@@ -1,0 +1,18 @@
+AWS Certified Cloud Practitioner
+Certification: CLF-C02
+Issued: August 2025
+Valid through: July 2028
+Issuing organization: Amazon Web Services
+
+Verification: Credly digital badge (credential ID available on request)
+
+Domains covered by CLF-C02:
+  1. Cloud Concepts                      24%
+  2. Security and Compliance             30%
+  3. Cloud Technology and Services       34%
+  4. Billing, Pricing, and Support       12%
+
+Education
+  High School Diploma — Penn Foster
+  Self-taught developer. Ongoing self-directed study in cloud architecture, software engineering,
+  and AI-assisted development.

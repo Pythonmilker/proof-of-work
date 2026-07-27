@@ -1,0 +1,58 @@
+$ terraform state list | wc -l
+212
+
+$ terraform providers
+Providers required by configuration:
+.
+|-- provider[registry.terraform.io/hashicorp/aws] ~> 5.0
+|-- provider[registry.terraform.io/hashicorp/random]
+|-- provider[registry.terraform.io/hashicorp/archive]
+
+$ terraform state list | awk -F. '{print $1"."$2}' | sort | uniq -c | sort -rn | head -30
+     25 aws_lambda_function
+     21 aws_dynamodb_table
+     19 aws_iam_role_policy
+     17 aws_apigatewayv2_route
+     14 aws_iam_role
+     12 aws_cloudwatch_log_group
+      9 aws_s3_bucket
+      8 aws_lambda_permission
+      7 aws_apigatewayv2_api
+      6 aws_ses_domain_identity
+      6 aws_cloudfront_distribution
+      5 aws_sns_topic
+      5 aws_route53_record
+      4 aws_cognito_user_pool_client
+      4 aws_eventbridge_rule
+      3 aws_wafv2_web_acl
+      3 aws_acm_certificate
+      3 aws_s3_bucket_replication_configuration
+      2 aws_cognito_user_pool
+      2 aws_codebuild_project
+      1 aws_secretsmanager_secret
+
+VIRAL HOST DIGITAL — infrastructure notes
+=========================================
+Company site + client portal + custom CRM + outreach system. All serverless. Built Feb 2026,
+security hardening pass Jul 2026. LIVE at https://viralhostdigital.com
+
+Stack:  Astro + React islands on the front. Node Lambdas behind API Gateway (HTTP + WebSocket).
+        DynamoDB — 21-table multi-tenant CRM keyed on a Cognito custom:tenantId claim.
+        Stripe. SES with bounce/complaint event tracking. EventBridge schedules.
+        Gemini chat endpoint behind CloudFront + WAF.
+        Google Search Console + Google Ads Python integrations.
+        Terraform, 212 resources, multi-region.
+
+Roughly 39k lines of code deduped across 276 files.
+
+Hardening work worth writing down:
+  - Defense in depth on the public LLM endpoint: CloudFront origin-verify secret header, WAF ACL,
+    and a per-IP quota. The endpoint is public by necessity; nothing about it is open.
+  - Terraform drift reconciliation, then state migration to a versioned + encrypted S3 backend.
+  - git-history scrub of leaked material after an incident. Real incident response, not a drill.
+  - CodeBuild project ViralHostSiteBuild runs CI/CD for the company site:
+    build -> S3 sync -> CloudFront invalidation.
+
+Client sites running on the same patterns:
+  https://dewdropkc.com          Astro rebuild + SES contact Lambda with a timing honeypot + Terraform
+  https://mywindowssparkle.com   S3/CloudFront + contact API

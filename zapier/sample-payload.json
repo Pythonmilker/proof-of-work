@@ -1,0 +1,18 @@
+{
+  "_comment": "A real Roles row, as the Airtable trigger delivers it. Use it to build the Slack message mapping without waiting for a pipeline run. Results and Requirements are truncated here; the real fields carry the full JSON.",
+  "id": "recEXAMPLE0000001",
+  "createdTime": "2026-07-27T17:20:00.000Z",
+  "fields": {
+    "Key": "role-arootah-2026-07-27",
+    "Title": "AI Product Engineer",
+    "Company": "Arootah",
+    "Score": 78,
+    "Matched At": "2026-07-27T17:20:00.000Z",
+    "Model": "anthropic/claude-haiku-4.5",
+    "Source": "n8n",
+    "Ingested At": "2026-07-27T17:20:00.000Z",
+    "Requirements": "[{\"id\":\"req-1\",\"text\":\"React\",\"kind\":\"required\",\"category\":\"frontend\"}]",
+    "Results": "[{\"requirementId\":\"req-1\",\"status\":\"proven\",\"score\":1,\"evidence\":[\"ev-tendril-store\"],\"rationale\":\"React — shipped in Parastoria, Proof of Work and Tendril, with 15 linked receipts.\",\"rationaleSource\":\"template\"}]",
+    "Posted Text": "AI Product Engineer\nArootah — part-time, remote, 20-25 hrs/week\n…"
+  }
+}

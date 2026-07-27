@@ -1,0 +1,41 @@
+{
+  "name": "proof-of-work",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Turns messy evidence of what someone built into a receipt-backed capability record, then scores it against any job description.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "doctor": "tsx scripts/doctor.ts",
+    "seed": "tsx scripts/seed.ts",
+    "n8n:build": "tsx n8n/build.ts",
+    "airtable:provision": "tsx airtable/provision.ts",
+    "airtable:push": "tsx airtable/push.ts",
+    "verify": "pnpm typecheck && pnpm test && pnpm n8n:build --check",
+    "screenshots": "tsx scripts/screenshots.ts"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "playwright": "^1.62.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "vitest": "^3.2.0"
+  },
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=20.19"
+  }
+}

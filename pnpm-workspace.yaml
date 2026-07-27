@@ -1,0 +1,5 @@
+# pnpm 11 reads the build allowlist from here, not from package.json — an `onlyBuiltDependencies` key in
+# package.json is silently ignored, which shows up as esbuild never installing its platform binary and
+# Vite failing at startup with a confusing message about a missing native module.
+allowBuilds:
+  esbuild: true

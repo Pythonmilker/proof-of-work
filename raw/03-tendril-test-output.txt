@@ -1,0 +1,51 @@
+PS C:\Users\joelb\Desktop\Tendril> npm test
+
+> tendril-kanban@1.0.159 test
+> npx playwright test && npx vitest run
+
+Running 124 tests using 4 workers
+
+  ✓  1 [chromium] › tests/e2e/onboarding.spec.ts:12:3 › first run creates a workspace (3.1s)
+  ✓  2 [chromium] › tests/e2e/onboarding.spec.ts:31:3 › provider picker accepts a BYOK key (2.4s)
+  ✓  3 [chromium] › tests/e2e/kanban.spec.ts:18:3 › dragging a card moves the task (1.9s)
+  ...
+  ✓ 122 [chromium] › tests/e2e/preview.spec.ts:44:3 › live preview reloads on file change (4.8s)
+  ✓ 123 [chromium] › tests/e2e/worktree.spec.ts:9:3 › agents run in isolated worktrees (6.2s)
+  ✓ 124 [chromium] › tests/e2e/licensing.spec.ts:27:3 › device binding rejects a 4th device (2.2s)
+
+  124 passed (3.7m)
+
+ RUN  v3.2.4 C:/Users/joelb/Desktop/Tendril
+
+ ✓ tests/unit/knowledge-graph/indexer.test.ts (41)
+ ✓ tests/unit/knowledge-graph/symbols.test.ts (38)
+ ✓ tests/unit/agents/planner.test.ts (33)
+ ✓ tests/unit/agents/auditor.test.ts (29)
+ ✓ tests/unit/proxy/anthropic-to-openai.test.ts (47)
+ ✓ tests/unit/proxy/sse-state-machine.test.ts (52)
+ ✓ tests/unit/proxy/gemini-translate.test.ts (36)
+ ✓ tests/unit/licensing/device-binding.test.ts (24)
+ ✓ tests/unit/licensing/entitlements.test.ts (27)
+ ✓ tests/unit/git/worktree.test.ts (31)
+ ✓ tests/unit/git/merge.test.ts (22)
+ ✓ tests/unit/mcp/client.test.ts (19)
+ ✓ tests/unit/mcp/server.test.ts (17)
+ ✓ tests/unit/store/settings.test.ts (14)
+ ✓ tests/unit/store/projects.test.ts (21)
+ ✓ tests/unit/preview/bundler.test.ts (16)
+ ✓ tests/unit/preview/reload.test.ts (11)
+ ✓ tests/unit/usage/metering.test.ts (18)
+ ✓ tests/unit/usage/quota.test.ts (13)
+ ✓ tests/unit/appx/manifest.test.ts (9)
+ ✓ tests/unit/appx/tiles.test.ts (7)
+ ✓ tests/unit/util/paths.test.ts (6)
+ ✓ tests/unit/util/hash.test.ts (3)
+ ✓ tests/unit/util/retry.test.ts (2)
+
+ Test Files  24 passed (24)
+      Tests  536 passed (536)
+   Start at  09:14:22
+   Duration  71.40s (transform 4.21s, setup 0ms, collect 18.66s, tests 42.10s)
+
+PS C:\Users\joelb\Desktop\Tendril> git rev-list --count HEAD
+125

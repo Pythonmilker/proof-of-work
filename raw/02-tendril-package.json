@@ -1,0 +1,52 @@
+{
+  "name": "tendril-kanban",
+  "displayName": "Tendril",
+  "description": "Orchestrate AI coding agents across all your projects. A cross-project knowledge graph remembers your patterns and conventions so agents reuse what worked in your other repos. Runs on your choice of Anthropic, OpenAI, or Google — matching each phase (plan, build, audit, review) to the right model in that provider's lineup. Windows-native.",
+  "version": "1.0.159",
+  "publisher": "tendril",
+  "license": "MIT",
+  "main": "./electron/main.js",
+  "scripts": {
+    "dev": "node scripts/ensure-native-abi.js --target node && node server.js",
+    "build:dashboard": "cd dashboard-ui && npm run build",
+    "electron:dev": "node scripts/ensure-native-abi.js --target electron && npm run build:dashboard && electron electron/main.js",
+    "build:appx-tiles": "node scripts/generate-appx-tiles.js",
+    "fetch:bundled-deps": "node scripts/fetch-bundled-deps.js",
+    "electron:build": "node scripts/sync-appx-version.js && npm run build:dashboard && npm run build:appx-tiles && npm run rebuild:native && npm run fetch:bundled-deps && electron-builder && npm run sign:appx && npm run prune:release",
+    "electron:build:protected": "npm run rebuild:native && node scripts/build-protected.js",
+    "verify:appx": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-appx-locally.ps1",
+    "sign:appx": "node scripts/sign-latest-appx.js",
+    "release": "npm run electron:build:protected && aws s3 sync release/ s3://tendril-releases/releases/",
+    "mcp:discover": "node scripts/mcp-discover.js",
+    "mcp:audit": "node scripts/mcp-audit.js",
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
+    "test": "npx playwright test && npx vitest run",
+    "test:e2e": "npx playwright test",
+    "test:unit": "npx vitest run",
+    "preflight": "node scripts/v1-preflight.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "sqlite-vec": "^0.1.7-alpha.2",
+    "stripe": "^18.5.0",
+    "tree-sitter": "^0.25.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "@playwright/test": "^1.56.0",
+    "electron": "^41.0.0",
+    "electron-builder": "^25.1.8",
+    "react": "^19.2.0",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4"
+  },
+  "build": {
+    "appId": "ViralHostDigital.Tendril",
+    "productName": "Tendril",
+    "win": { "target": ["appx", "nsis"] }
+  }
+}
