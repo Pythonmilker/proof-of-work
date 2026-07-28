@@ -24,18 +24,25 @@ fields, which embeds a real list whose fields, sort and filter are configurable.
 `Title`, `Company`, `Score`, `Verdict Summary`, `Results`. Then, in edit mode:
 
 1. **Fields** (right panel → Data → Fields · gear): visible = `Title` (the page title, size X-Large),
-   `Verdict Summary`, `Score`, `Company`, `Results`, in that order — drag to reorder. Everything else
-   off, especially `Key`, `Posted Text` and `Matched At` (a raw ISO timestamp).
+   `Verdict Summary`, `Score`, `Scored On` (built in step 4), `Company`, `Results`, in that order —
+   drag to reorder. Everything else off, especially `Key`, `Posted Text` and `Matched At` (a raw ISO
+   timestamp; `Scored On` is its readable face).
 2. **Verdict block**
    - Click `Verdict Summary` on the canvas — it is the headline; a fraction grades itself, a lone
      percentage invites "is that good?".
    - Click `Score` → properties → **Label** → override to `Overall match` (this renames it on this
      page only). Then **Appearance → Helper text** → `Must-haves count double.`
    - The word "weighted" must not appear anywhere on the page.
-3. **Date and name**
-   - Rename the page itself to `Fit report — Joel Brannan` (left sidebar, page name).
-   - Click the top field group → **Show description** → "Click to add text" →
-     `Scored 28 Jul 2026 · against the posting as written`.
+3. **Name.** Rename the page itself to `Fit report — Joel Brannan` (left sidebar, page name).
+4. **Date, field-driven** (a hand-typed date goes stale on the next scoring run). In the **Data**
+   tab, on **Roles**, add a field `Scored On`, type **Formula**:
+
+   ```
+   DATETIME_FORMAT(DATETIME_PARSE({Matched At}), 'D MMM YYYY')
+   ```
+
+   Back on the interface page, toggle `Scored On` visible → Label override `Scored` → Helper text
+   `Against the posting as written.` It re-renders itself on every future run.
 4. **Requirement list**
    - Click `Results` → properties → **Appearance → Show as → View**, style **List**.
    - Click the embedded list on the canvas → **Data → Fields** → visible: `Requirement`, `Verdict`,
