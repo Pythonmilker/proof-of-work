@@ -1,6 +1,210 @@
 # Proof of Work — end-to-end design
 
-Status: design frozen 2026-07-27. Build in progress; §16 tracks what exists.
+Status: **v2 below supersedes the delivery architecture** (2026-07-27, after the base went live and the
+direction changed to Airtable-led). v1 remains under it as history and still governs everything it
+covers that v2 does not re-specify: the data model, the pipeline, the scoring rules, the AI stack, the
+tests.
+
+---
+
+# Version 2 — Airtable is the product (2026-07-27)
+
+## 1. The change, and why
+
+v1 delivered a React app backed by Airtable. That inverted the day the base went live. The people this
+would serve at an advisory firm — recruiters, talent ops, coaches — live in Airtable-like tools all day
+and click links out of emails; they do not clone repos. And a React front end over Airtable demonstrates
+the ability to *avoid* Interfaces, which is the opposite of what "Airtable as an application backend"
+is asking for.
+
+New division of labour, one line each:
+
+- **Airtable** is the delivered product: the record, the fit report, the thing that gets shared.
+- **n8n** is the only engine. Zero Airtable automations (see §2 for why that is forced anyway).
+- **React** keeps the one job Airtable is bad at: turning a wall of unstructured text into structured
+  rows, with the pipeline visible while it happens — and acting as the trigger surface that calls the
+  engine.
+- **Zapier** is gone. It was decoration and was removed before v2.
+
+The UX constraint, stated by the owner and treated as a hard rule: **simple to the extreme; the
+audience is non-technical.** Every v2 surface decision below is that rule applied.
+
+## 2. Platform facts this design stands on
+
+Researched against Airtable's own docs and pricing on 2026-07-27, because the plan gates move often.
+Re-verify the sharing rows immediately before handoff.
+
+| Fact | Status | Consequence |
+|---|---|---|
+| Read-only **shared view links** work on every plan incl. Free, **no login, no Airtable account** | verified | This is the recruiter's link |
+| **Public Interface sharing is paid-only.** On Free, Interfaces reach only invited collaborators with verified Airtable accounts | verified | The Interface is the screenshot + the upgrade target, not the default link |
+| Interface Designer itself is available on Free | verified | We still build the Interface page |
+| Automation "Run a script" is **unavailable on Free**; no native send-webhook action exists on any plan | verified | **Zero Airtable automations.** Buttons are formula-built URLs |
+| "Go to URL" buttons work for read-only viewers; run-automation buttons do not | verified | Triggers work from a shared surface |
+| Free API budget: **1,000 calls/workspace/month**, 5 req/s/base, 10 records/write | verified | ~30–40 full pipeline runs/month. Enough to film and demo; say so in the handoff |
+| Free: 1,000 records/base, 5 editors, unlimited read-only collaborators | probable (429'd on direct fetch; corroborated) | Seat costs are a non-issue for viewers |
+| Team plan $20/user/mo (annual) unlocks Share-to-web on Interface pages | verified | One seat converts the grid link into a designed public page, same journey step |
+| Formula fields **cannot be created via the API** | verified (field-model docs) | The display-formula fields below are click-built, on Joel's list |
+
+## 3. Sharing decision
+
+**Free plan (the design):** the recruiter's link is a public read-only **view** share link on a
+purpose-built `Fit report — {Company}` view of the Results table. No login, no account, hidden fields
+stay hidden. Accepted costs on Free: Airtable-branded grid UI rather than a designed page, no password,
+no expiry (the URL is the secret; revoking the link is a documented operating step when a search
+closes).
+
+**The Interface page is still built**, because it is (a) the 1440px screenshot embedded in the
+application itself and (b) what an invited read-only collaborator sees. It is never promised as the
+cold-visit surface on Free.
+
+**Upgrade path, noted not designed-around:** one Team seat makes the Interface page a public,
+password-protectable URL and replaces the grid link at the same journey step. Nothing else changes.
+
+## 4. The recruiter journey (max five steps, three clicks)
+
+1. **In the application email/PDF:** the screenshot of the Interface fit-report page — candidate name,
+   "Fit report — AI Product Engineer, {Company}", the verdict block "Meets 9 of 14 requirements in
+   full · 3 in part · 2 not covered", **green and red visible in the same frame** — and one link:
+   "Check the evidence yourself."
+2. **The shared view opens, no login:** ~14 rows for *their posting only*. Required group above
+   Preferred. Columns: Requirement · Status (green/amber/red, "Not covered" not "gap") · Why ·
+   Evidence. Group counts give the 9-3-2 tally at a glance. Most recruiters stop here.
+3. **Click a row:** the expanded record shows the requirement, the status in words, the one-sentence
+   Why, "What's missing" on non-proven rows, "Where it was done", and Evidence as flattened, dated
+   URLs.
+4. **Click an evidence URL:** the Microsoft Store listing or live product opens. This is the moment the
+   report stops being self-reported, and the whole design funnels toward it.
+5. **The bottom group is "Not covered"** — formatted identically to the wins (same typography, same
+   evidence column; a report that shrinks its gaps is apologising, one that formats them identically is
+   auditing), each row with "Closest related work" and a dated link, closing with *"Worth probing in a
+   first call."* Then they forward the link — which is a recruiter's actual job.
+
+**Privacy rule:** one posting per shared link, always filtered to that Role, never a record picker. A
+recruiter must not learn the surface *can* show other companies' scores.
+
+## 5. Surface specs
+
+### 5a. Shared view `Fit report — {Company}` (Results table) — the recruiter surface
+
+- Filter: `Role = {that posting}`. Group: Kind, Required first (safe to expose; the grouping field is
+  the one hidden-field exception on share links).
+- Visible, in order: **Requirement** · **Status** (display formula, §5d) · **Why** (Rationale) ·
+  **What's missing** (Shortfall) · **Evidence** (rollup formula: `Label — URL · Verified {date}`) ·
+  **Where it was done** (Projects link).
+- Hidden: Key, Category, Match Score, Rationale Source, the raw status select, Role / Technologies /
+  Capabilities links.
+- Share settings: copying disabled; test the expanded-record and CSV behaviour **incognito** before the
+  link goes anywhere.
+
+### 5b. Interface page "Fit report" — the screenshot, and the paid-tier public page
+
+Modern **Record detail layout on Roles** (not the legacy Blank layout — Blank is excluded from
+Share-to-web and deep links). Opened by URL, not by a picker. Top to bottom:
+
+1. Static header: candidate name (deliberately lives only here — no field holds it), "Fit report —
+   {Title}, {Company}", "Scored {date} · against your posting as written".
+2. Verdict block: a `Verdict Summary` formula field rendered large — *"Meets 9 of 14 requirements in
+   full · 3 in part · 2 not covered"* — with "Overall match 78%" smaller beside it, footnote
+   *"Must-haves count double."* The word "weighted" appears nowhere.
+3. The Results linked records as an inline list, grouped by Kind: Requirement · Status · Why ·
+   Evidence.
+4. "Not covered", always rendered, same format as the wins, sub-line *"Listed here so nothing surfaces
+   late in your process."*, closing *"Worth probing in a first call."*
+5. Footer trust line: *"Every Proven line links to something you can check without contacting the
+   candidate. Scores are computed by fixed rules, identical for every posting — never by an AI."*
+6. Owner-only button "Score this posting" — a **Go to URL** button bound to the `Score Link` formula
+   (§5d). URL buttons work for read-only viewers; automation buttons do not.
+
+### 5c. Interface page "Pipeline" — operator only, never shared
+
+The Needs Review counter and reasons, Model and Rationale Source transparency, ingest telemetry. On a
+recruiter surface "records parked for review" reads as "this data is broken"; on the operator page it
+is the honest error-branch. This split also gives the application its second screenshot.
+
+### 5d. Vocabulary, enforced by display formulas
+
+Stored values never change (`proven/partial/gap` stay lowercase so `airtable:push` stays idempotent and
+the parity tests hold). All relabelling happens in click-built formula fields:
+
+| On screen | Never on screen |
+|---|---|
+| Fit report · Overall match · Proven / Partial / **Not covered** · Why · What's missing · Evidence — check it yourself · Verified on {date} · Lines of code · Required / Preferred | Weighted coverage · stretch · gap (as a label) · Roles · Match Score decimals · Rationale Source · Model · Key / slugs · Aliases · Match Terms · Tier · Review Status · Ingested At |
+
+New click-built fields (formulas cannot be created via the API): `Status` display formula (emoji +
+word), `Verdict Summary` (Roles), `Report URL` (Roles), `Score Link` (Roles), `Evidence` rollup
+(Results). Net effect: a recruiter sees ~20 of the base's ~50 fields.
+
+## 6. Engine wiring — zero Airtable automations
+
+Forced and preferred: Free has no script action and no plan has a native webhook action, so nothing in
+Airtable calls anything. All movement is **n8n-side or button-URL**:
+
+- **Score this posting** (button on Roles): `Score Link` formula opens the React app with
+  `?roleKey={Key}`. React fetches that row's Posted Text and runs the normal match path (n8n webhook
+  primary, local API fallback), which writes the Role's score and its Results rows back to the base.
+- **Add evidence:** the React intake screen, unchanged, writing through the same engine.
+- n8n keeps its two webhooks (`/extract`, `/match`) as the pipeline entry points, exactly as committed.
+
+## 7. The React contract (v2)
+
+**Keeps:** Add evidence (the visible pipeline — extraction, validation, dedup, the before/after) and
+the score trigger. **Demo mode (no credentials) keeps everything**, unchanged — it is the README's
+zero-setup promise and costs nothing.
+
+**Loses, in live-Airtable mode only:** the Records browser (becomes "Open the base ↗") and the rendered
+fit report (becomes a one-card confirmation — score, counts, warnings, unresolved terms — plus "Open
+the fit report ↗"). Live mode never shows two fit reports.
+
+**Defects the boundary research found in the current code, to fix during implementation:**
+- `api.ts` posts both operations to one `VITE_PIPELINE_ENDPOINT` while n8n registers two paths — n8n
+  mode cannot currently work. Make it a base URL and append the paths.
+- `health()` in n8n mode reports everything "ready" without probing, and `snapshot()`/`reset()` silently
+  fall through to the bundled local store — the UI would render seed data while writes land in
+  Airtable. That violates this repo's own "never a silent fallback" rule. Probe the webhook, and gate
+  or reroute the fallthrough visibly.
+- The n8n Respond shapes are summaries, not `IngestResult`/`MatchReport`; render them as a
+  `LiveRunResult` card rather than teaching the workflows to emit the full types.
+- The intake notice "new capability recorded as unverified" is false on the n8n path, which links
+  existing taxonomy and reports the rest as `unresolved` — surface that list instead ("3 terms need
+  adding in the base"), and present the divergence as what it is: the taxonomy is curated in the
+  product the hiring team owns.
+- Stale text: `Records.tsx` still says "five tables".
+
+## 8. Build plan
+
+| # | Who | Effort | What |
+|---|---|---|---|
+| 1 | claude | done in v2 commit | This design; README stale-paragraph fix |
+| 2 | claude | ~30 min | Seed helper: write the `Fit report — Arootah` view spec + exact formulas into `airtable/VIEWS.md` / `INTERFACE.md` (v2 rewrite of both) |
+| 3 | joel | ~10 min | Click-build the 5 formula/rollup fields from the spec |
+| 4 | joel | ~15 min | Build the shared view, hide fields, create the share link, **test it incognito** |
+| 5 | claude | ~2–3 h | React contract: endpoint split, honest n8n probe, live-mode gating, LiveRunResult card, unresolved notice, text fixes |
+| 6 | joel | ~60–90 min | Interface pages "Fit report" + "Pipeline" from the click-script |
+| 7 | claude | ~1 h | Re-shoot app screenshots; rewrite README/WRITEUP so Airtable leads; reconcile counts |
+| 8 | joel | ~30 min | Three SaaS screenshots (n8n canvas, base with Tendril expanded, Interface page) |
+| 9 | both | — | Re-verify sharing plan-gates the day of submission; film the 75s take |
+
+## 9. Risks and open questions
+
+- **The Free-tier recruiter surface is a branded grid, not a designed page.** Accepted trade; the
+  designed page exists as the screenshot and behind one $20 Team seat if wanted. *(Open: is that seat
+  worth it for the application? Owner's call.)*
+- **1,000 API calls/month** on Free ≈ 30–40 full runs. Film early in the month; noted in the handoff.
+- **~14 rapid Results upserts** may brush 5 req/s — enable retry-on-fail on the two n8n write nodes or
+  test a full posting before filming.
+- **Unverified residue** (all listed in the research log): the exact paid tier where Interface
+  Share-to-web begins (Team vs Business), incognito behaviour of expanded records on share links, and
+  whether conditional colours render for anonymous viewers. Each has a cheap live test on Joel's list.
+- **What does not change, at all:** the evidence gate, the tie rule, the honest Gaps content, the
+  deterministic scoring, the tests, the committed workflows, the seed's numbers. v2 moves surfaces;
+  it does not touch the argument.
+
+---
+
+# Version 1 — original design (superseded where v2 speaks)
+
+Status: design frozen 2026-07-27. Build complete; §16 tracks what was built.
 
 ---
 

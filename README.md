@@ -177,10 +177,9 @@ generated sentences are less specific than the deterministic templates they repl
 guard in `src/pipeline/rationale.ts` discards any sentence containing a number that is not in the records
 it was written from, and that row falls back to the template.
 
-The Airtable Interface cannot expand the `Results` field into a table, because results are stored as JSON
-in one long-text field. Splitting them into their own table would fix the Interface and break the
-five-table constraint. `airtable/INTERFACE.md` documents the three options and recommends showing the
-React report alongside.
+The Airtable views and Interface pages have to be created by hand. Airtable has no API for either, so
+`airtable/VIEWS.md` and `airtable/INTERFACE.md` are click-scripts, and the display-formula fields they
+call for cannot be created via the API either.
 
 Retrieval without a key is lexical plus token overlap. It matches technologies a posting names literally
 and misses capabilities a posting only describes. The header says `lexical` when this is what ran.
