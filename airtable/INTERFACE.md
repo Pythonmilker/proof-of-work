@@ -10,52 +10,50 @@ page 2 is operator-only. The recruiter's actual link is the shared view from `VI
 Use the **modern layouts** when prompted. Do not pick the legacy "Blank" layout — it is excluded from
 sharing and deep links, and the screenshot should show the current product, not the deprecated one.
 
+**Current-UI constraints** (verified against support.airtable.com, 2026-07-28): modern record
+review/record detail pages are a configured field list, not a canvas. The Text element exists only on
+Blank and legacy layouts, the left record list cannot be hidden or pinned, and a linked-record field
+shown as cards ("Show as: Field") mirrors the linked table's own view — its fields cannot be chosen
+per-interface. What the page type does offer: per-page **Label** overrides, per-field **Helper text**
+(Appearance), **group descriptions** ("Show description"), and **Show as: View** on linked-record
+fields, which embeds a real list whose fields, sort and filter are configurable. The script uses those.
+
 ## Page 1 — `Fit report` (the screenshot)
 
-**Interfaces → Create → start from Record detail** (called "Record review" in some versions), source
-table **Roles**.
+**Interfaces → Create → Record review**, source table **Roles**. In the wizard, toggle on only
+`Title`, `Company`, `Score`, `Verdict Summary`, `Results`. Then, in edit mode:
 
-Configure the page:
-
-- Record picker: **hidden** — pin the page to the Arootah posting record (choose it as the default /
-  "specific record" if offered; otherwise leave the picker but screenshot with it collapsed).
-- Title element (static text): `Joel Brannan` on one line, then
-  `Fit report — AI Product Engineer, Arootah` as the heading.
-- Subtitle (static text): `Scored 27 Jul 2026 · against your posting as written`
-
-Then, top to bottom:
-
-1. **Verdict block**
-   - Field element: `Verdict Summary`, large text size. This is the headline — a fraction grades
-     itself; a lone percentage invites "is that good?".
-   - Field element beside it: `Score`, label overridden to **`Overall match`**, with a static text
-     footnote right under it: `Must-haves count double.`
+1. **Fields** (right panel → Data → Fields · gear): visible = `Title` (the page title, size X-Large),
+   `Verdict Summary`, `Score`, `Company`, `Results`, in that order — drag to reorder. Everything else
+   off, especially `Key`, `Posted Text` and `Matched At` (a raw ISO timestamp).
+2. **Verdict block**
+   - Click `Verdict Summary` on the canvas — it is the headline; a fraction grades itself, a lone
+     percentage invites "is that good?".
+   - Click `Score` → properties → **Label** → override to `Overall match` (this renames it on this
+     page only). Then **Appearance → Helper text** → `Must-haves count double.`
    - The word "weighted" must not appear anywhere on the page.
-2. **Requirement list**
-   - Element: the `Results` linked-record field, displayed as a **list/grid**, grouped by `Kind`
-     (required first), fields: `Requirement`, `Verdict`, `Rationale`,
-     `Receipts`. Hide everything else, especially `Match Score` and
-     `Rationale Source`.
-   - Colour by `Status` if the element offers conditional colour; the `Verdict` emoji carries the
-     signal either way.
-3. **Not covered section**
-   - Static text header: `Not covered`
-   - Static text sub-line: `Listed here so nothing surfaces late in your process.`
-   - Second `Results` element, filtered `Status is gap` OR (`Status is partial` AND `Kind is
-     required`) if the element supports filters; otherwise skip this element — the grouped list above
-     already shows the red rows — and keep just the two text lines above the footer.
-   - Static text closing line: `Worth probing in a first call.`
-   - Same typography as the wins. A report that shrinks its gaps is apologising; one that formats
-     them identically is auditing.
-4. **Footer trust line** (static text, small):
-   `Every Proven line links to something you can check without contacting the candidate. Scores are
-   computed by fixed rules, identical for every posting — never by an AI.`
-5. **Owner button** (optional): Button element → action **Go to URL** → dynamic, field `Score Link`.
-   Label: `Score this posting`. Read-only viewers can click URL buttons; only you will ever see this
-   page anyway on Free.
+3. **Date and name**
+   - Rename the page itself to `Fit report — Joel Brannan` (left sidebar, page name).
+   - Click the top field group → **Show description** → "Click to add text" →
+     `Scored 28 Jul 2026 · against the posting as written`.
+4. **Requirement list**
+   - Click `Results` → properties → **Appearance → Show as → View**, style **List**.
+   - Click the embedded list on the canvas → **Data → Fields** → visible: `Requirement`, `Verdict`,
+     `Rationale`, `Receipts`. Hide everything else, especially `Match Score` and `Rationale Source`.
+   - **Sort**: `Status` Z→A, so proven rows lead and the red rows close the page. If the list offers
+     grouping, group by `Status` instead, proven first — same effect with headers.
+   - **Helper text** on the Results field: `Every Proven line links to something you can check
+     without contacting the candidate. Scores are computed by fixed rules, identical for every
+     posting — never by an AI.`
+5. **No separate "Not covered" section.** The sort puts the two red rows last, formatted identically
+   to the wins — a report that shrinks its gaps is apologising; one that formats them identically is
+   auditing. The shared view (`VIEWS.md` §B) carries the "worth probing in a first call" framing.
+6. **User actions**: Edit fields **Off**, Comments off, Buttons **None**. The `Score Link` button
+   idea is dropped — it needed the optional A6 field.
 
-**Screenshot** (this page is deliverable screenshot #3): full page at 1440px+, verdict block and at
-least one 🟢 row AND the red rows in the same frame. Green and red together is the argument.
+**Screenshot** (this page is deliverable screenshot #3): Publish first, full page at 1440px+, verdict
+block and at least one 🟢 row AND a red row in the same frame — green and red together is the
+argument. Crop the record-list pane; it cannot be hidden on this layout.
 
 ## Page 2 — `Pipeline` (operator only, never shared, screenshot #4 if wanted)
 
