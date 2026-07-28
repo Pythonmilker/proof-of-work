@@ -16,6 +16,12 @@ genuinely true — and Claude Code lands proven.
 Joel's shared view returns all 16 with no filter repoint needed. Outstanding: Joel's Interface pages,
 the three SaaS screenshots, re-shot demo screenshots, and the recording.
 
+**Full live mode since 2026-07-28.** OPENROUTER_API_KEY in `.env.local` is North Star's capped,
+disposable demo key (Joel's choice — the main key stays in AWS untouched). `pnpm doctor`: all green,
+`live · Airtable · Claude + embeddings`. The base's rationales are model-written where the
+fabrication guard passed them, hybrid retrieval, same 75% — verdict-identical to the deterministic
+run, verified row for row before writing.
+
 ## Done
 
 - `docs/DESIGN.md` — full end-to-end design, written before the build and kept current.
@@ -58,6 +64,10 @@ the three SaaS screenshots, re-shot demo screenshots, and the recording.
   one tool covers both.
 - **Plain CSS, no Tailwind.** The screenshots are a deliverable and a build that cannot break is worth
   more than utility classes.
+- **Deterministic-first posting parse (2026-07-28).** With a key live, gpt-4o-mini scored the real
+  posting 66% over 18 paraphrased rows, including "strong problem-solving skills" as a minted gap.
+  Code reads structured postings verbatim (75%, 16 rows); the model reads prose-heavy ones (under 4
+  bullets found). Verified verdict-identical under full model mode before the flip.
 
 ## Bugs found and fixed during the build
 
