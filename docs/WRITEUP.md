@@ -86,10 +86,8 @@ set but rejected reports as rejected. Full setup is in the README.
 The rationale model is called once per report rather than once per requirement, so with a key set the
 generated sentences are less specific than the deterministic templates they replace on some rows.
 
-No Airtable base has been created against a real account yet. The schema, the provisioning script and the
-seeding script are written and unit-tested, so every field spec in `airtable/schema.ts` reads correct and
-has not been executed. The n8n workflows, by contrast, have been imported into a real self-hosted
-instance and round-tripped back out intact.
+The three views and the Interface dashboard still have to be created by hand. Airtable has no API for
+either, so `airtable/VIEWS.md` and `airtable/INTERFACE.md` are click-scripts rather than code.
 
 Retrieval without a key is lexical plus token overlap. It matches technologies a posting names literally
 and misses capabilities a posting only describes.

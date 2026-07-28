@@ -68,8 +68,9 @@ Global standards load from `~/.claude/CLAUDE.md`.
 - [x] Three ingest branches demonstrable: new record, dedup, validation failure to Needs Review
 - [x] Fit report with citations and a truthful Gaps section
 - [x] Both OpenRouter traps have regression tests asserting real request bodies
-- [x] Two n8n workflows committed, generated from source, drift-checked
-- [x] Airtable base creatable from one token, idempotent
+- [x] Two n8n workflows committed, generated from source, drift-checked, and verified to import and
+      round-trip in a real self-hosted n8n
+- [x] Airtable base created and seeded against a real account from one token, idempotent
 - [x] Zap documented with a testable sample payload
 - [x] README through the `technical-writing` skill with its grep pass re-run
 - [x] Nine screenshots captured by `pnpm screenshots`; three more need Joel's live accounts

@@ -8,8 +8,10 @@ Progress anchor. Update at the end of each session.
 `tsc --noEmit` clean, `pnpm verify` passes including the n8n drift check. Branch `feat/proof-of-work`,
 not pushed. Sample posting scores 78 percent: 9 proven, 3 partial, 2 gaps, 6 of 9 required proven.
 
-**Outstanding: the three screenshots that need live accounts, and the recording.** Everything code-side
-runs with no credentials.
+**The Airtable base is live and seeded**, and both n8n workflows import into a real self-hosted instance.
+A match run against the real base scores 78% in 6.2s and writes 14 Results rows with their citations as
+real links. Outstanding: the Airtable views and Interface (click-scripts, ~17 min), the three SaaS
+screenshots, and the recording.
 
 ## Done
 
@@ -110,8 +112,9 @@ The ones that mattered, all fixed:
 
 ## Open
 
-1. **Screenshots 1, 2 and 3** need Joel's live n8n and Airtable accounts. `docs/SHOTLIST.md` has the
-   exact framing; the setup is two commands and two click-scripts.
+1. **Screenshots 1, 2 and 3.** The base and n8n are both up now, so this is framing rather than setup.
+   `docs/SHOTLIST.md` has the exact shots. Create the views first (`airtable/VIEWS.md`) or shot 2 has
+   nothing to show.
 2. **The recording**, 60 to 90 seconds. Script in `docs/DEMO-SCRIPT.md`.
 3. **Arootah statistics.** "700+ vetted advisors" and "600+ coaches" could not be found on their site and
    are used nowhere. "18 functional disciplines" is confirmed and is used. Their site says "time-to-hire",
