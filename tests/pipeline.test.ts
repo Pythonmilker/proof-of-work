@@ -156,7 +156,7 @@ describe('matchRole', () => {
     });
   });
 
-  it('caps Airtable, n8n and Zapier at partial, because they are stretch capabilities', async () => {
+  it('caps Airtable and n8n at partial, because they are stretch capabilities', async () => {
     const report = await matchRole(SAMPLE_POSTING, store, keyless);
     const automation = report.role.requirements.filter((r) => /airtable|n8n|zapier/i.test(r.text));
 

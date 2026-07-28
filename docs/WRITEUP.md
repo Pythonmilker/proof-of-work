@@ -100,6 +100,6 @@ Three of the eight screenshots need live n8n and Airtable accounts, so they are 
 ## Numbers
 
 180 tests across 12 files, typecheck clean. 9,354 lines of TypeScript across 47 files, counted with
-`git ls-files "*.ts" "*.tsx" | xargs wc -l`. 6 projects, 44 technologies, 23 capabilities, 24 evidence
-rows, 158 links. Two workflows, 36 nodes between them, verified to import and round-trip in a real n8n. 11 raw artifacts committed so the before-and-after
+`git ls-files "*.ts" "*.tsx" | xargs wc -l`. 7 projects, 44 technologies, 23 capabilities, 23 evidence
+rows. Two workflows, 36 nodes between them, verified to import and round-trip in a real n8n. 11 raw artifacts committed so the before-and-after
 is reproducible. The static build is 304 kB, 98 kB gzipped.

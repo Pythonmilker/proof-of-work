@@ -78,7 +78,7 @@ describe('the evidence gate', () => {
   });
 
   it('caps a stretch capability at partial even with receipts attached', () => {
-    // This is what makes the Airtable, n8n and Zapier rows honest: they have evidence, and the evidence
+    // This is what makes the Airtable and n8n rows honest: they have evidence, and the evidence
     // is this project. A stretch tier says "defensible, not shipped" and no match score overrides it.
     const snapshot = snapshotWith({
       capabilities: [capability('cap', 'stretch', ['ev1'], ['p1'])],

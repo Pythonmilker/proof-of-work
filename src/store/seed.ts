@@ -71,10 +71,11 @@ const technologies: Technology[] = [
   { id: 'openrouter', name: 'OpenRouter', aliases: ['openrouter'], category: 'ai', projects: [] },
   { id: 'vercel-ai-sdk', name: 'Vercel AI SDK', aliases: ['vercel ai sdk', 'ai sdk'], category: 'ai', projects: [] },
 
-  // automation — the three the posting asks for
+  // automation — the two the record actually has
   { id: 'airtable', name: 'Airtable', aliases: ['airtable', 'air table'], category: 'automation', projects: [] },
   { id: 'n8n', name: 'n8n', aliases: ['n8n', 'n8n.io'], category: 'automation', projects: [] },
-  { id: 'zapier', name: 'Zapier', aliases: ['zapier', 'zaps', 'zap'], category: 'automation', projects: [] },
+
+  { id: 'brevo', name: 'Brevo', aliases: ['brevo', 'sendinblue'], category: 'automation', projects: [] },
 
   // payments
   { id: 'stripe', name: 'Stripe', aliases: ['stripe', 'stripe billing', 'stripe checkout'], category: 'payments', projects: [] },
@@ -125,11 +126,15 @@ const evidence: Evidence[] = [
   // Certification
   { id: 'ev-aws-ccp', label: 'AWS Certified Cloud Practitioner', kind: 'certification', value: 'CLF-C02, issued Aug 2025, valid through Jul 2028', url: null, verifiedOn: VERIFIED, projects: [] },
 
-  // This project. The only receipts backing Airtable, n8n and Zapier — which is the honest position,
-  // and the Gaps section says so in as many words.
+  // This project. The only receipts backing Airtable and n8n, which is the honest position, and the
+  // Gaps section says so in as many words.
+  //
+  // Zapier is deliberately absent. It was here, backed by a documented-but-never-built Zap that existed
+  // to tick "n8n and/or Zapier" in a posting. n8n does the same job better, so the Zap was decoration,
+  // and a decorative row in a record whose entire argument is that its claims are backed is worse than
+  // an empty one. The posting still asks for Zapier; the record does not have it, and now says so.
   { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '5 tables, 2 views and an Interface, provisioned from a single PAT via the Meta API', url: null, verifiedOn: VERIFIED, projects: ['proof-of-work'] },
   { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and checked for drift in CI', url: null, verifiedOn: VERIFIED, projects: ['proof-of-work'] },
-  { id: 'ev-pow-zap', label: 'Zapier automation', kind: 'artifact', value: '1 Zap: new Roles record to Slack notification', url: null, verifiedOn: VERIFIED, projects: ['proof-of-work'] },
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -276,8 +281,23 @@ const capabilities: Capability[] = [
     statement: 'SES inbound and outbound with DKIM, SPF and DMARC, bounce and complaint handling, and CAN-SPAM-compliant sequences.',
     tier: 'proven',
     matchTerms: ['email', 'ses', 'transactional email', 'deliverability', 'outbound', 'email automation'],
-    projects: ['viral-host-digital'],
+    projects: ['viral-host-digital', 'vhd-outreach'],
     evidence: ['ev-vhd-site', 'ev-vhd-terraform'],
+  },
+  {
+    id: 'cap-scheduled-automation',
+    name: 'Scheduled multi-step automation',
+    statement:
+      'Event-driven sequences that run unattended: EventBridge-scheduled steps with daily caps, suppression lists, and compliance gates, in production against real recipients.',
+    tier: 'proven',
+    // 'workflow automation' is deliberately here AND on the n8n capability. A posting asking for
+    // "n8n and/or Zapier for workflow automation" then matches both at full score, and the tie rule in
+    // score.ts resolves an ambiguous best match to partial — which is right: the discipline is proven,
+    // the named tool is not. A posting asking for workflow automation without naming a tool gets the
+    // proven row, which is also right.
+    matchTerms: ['workflow automation', 'scheduled automation', 'automation pipeline', 'drip campaign', 'sequences', 'event-driven', 'cron', 'background jobs', 'outreach automation'],
+    projects: ['vhd-outreach'],
+    evidence: ['ev-vhd-terraform', 'ev-vhd-site'],
   },
   {
     id: 'cap-security-hardening',
@@ -323,20 +343,15 @@ const capabilities: Capability[] = [
   {
     id: 'cap-n8n-automation',
     name: 'Workflow automation with n8n',
-    statement: 'Builds n8n workflows with branching, code nodes and an explicit error path, committed to source control rather than living only in the tenant.',
+    statement: 'Builds n8n workflows with branching, code nodes and an explicit error path, generated from source and committed rather than living only in the tenant. Verified to import and run in a self-hosted instance.',
     tier: 'stretch',
+    // Deliberately NOT matching 'zapier' or 'make.com'. A posting saying "n8n and/or Zapier" is
+    // satisfied by n8n, and it matches on that word. A posting saying only "Zapier" should come out a
+    // gap, because it is one. Adding the sibling tools here would quietly convert one tool's experience
+    // into a claim about another, which is the soft over-claim this whole record exists to refuse.
     matchTerms: ['n8n', 'workflow automation', 'automation platform', 'workflow builder', 'integration platform', 'ipaas', 'internal tool', 'connect system', 'systems integration', 'connecting systems'],
     projects: ['proof-of-work'],
     evidence: ['ev-pow-n8n'],
-  },
-  {
-    id: 'cap-zapier',
-    name: 'Zapier integrations',
-    statement: 'Connects an application to a notification channel through Zapier with a filtered trigger.',
-    tier: 'stretch',
-    matchTerms: ['zapier', 'zap', 'make.com', 'no-code automation'],
-    projects: ['proof-of-work'],
-    evidence: ['ev-pow-zap'],
   },
   {
     id: 'cap-cicd',
@@ -442,6 +457,28 @@ const projects: Project[] = [
     ingestedAt: `${VERIFIED}T00:00:00.000Z`,
   },
   {
+    id: 'vhd-outreach',
+    name: 'VHD Outreach',
+    slug: 'vhd-outreach',
+    role: 'Founder and sole engineer',
+    started: '2026-02',
+    ended: null,
+    status: 'live',
+    // No LOC, test or commit figures on this row: the ledger records what it does, not counted metrics,
+    // and an uncounted metric stays absent rather than estimated. The infra receipts are real — its
+    // outreach.tf and outreach-studio.tf modules are part of the 212-resource Terraform estate.
+    summary:
+      'Automated cold-email engine: multi-step sequences on EventBridge schedules with daily send caps, suppression, CAN-SPAM-compliant unsubscribe, and per-prospect review pages served behind CloudFront. Brevo plus SES delivery.',
+    metrics: {},
+    technologies: ['brevo', 'ses', 'aws-lambda', 'eventbridge', 'cloudfront', 'nodejs', 'terraform'],
+    capabilities: ['cap-scheduled-automation', 'cap-email-pipeline', 'cap-serverless'],
+    evidence: ['ev-vhd-terraform', 'ev-vhd-site'],
+    reviewStatus: 'ok',
+    reviewReason: null,
+    source: '12-vhd-outreach.md',
+    ingestedAt: `${VERIFIED}T00:00:00.000Z`,
+  },
+  {
     id: 'client-and-early-web-work',
     name: 'Client and early web work',
     slug: 'client-and-early-web-work',
@@ -471,9 +508,9 @@ const projects: Project[] = [
     summary:
       'This system. Ingests messy evidence into a receipt-backed capability record and scores it against a pasted job description. Airtable is the backend, two n8n workflows carry the pipeline, and one Zap sends the notification.',
     metrics: {},
-    technologies: ['react', 'typescript', 'vite', 'airtable', 'n8n', 'zapier', 'openrouter', 'claude-api', 'vitest', 'nodejs', 'rest-api'],
-    capabilities: ['cap-airtable-backend', 'cap-n8n-automation', 'cap-zapier', 'cap-structured-output', 'cap-llm-integration', 'cap-rag', 'cap-frontend', 'cap-documentation'],
-    evidence: ['ev-pow-airtable', 'ev-pow-n8n', 'ev-pow-zap'],
+    technologies: ['react', 'typescript', 'vite', 'airtable', 'n8n', 'openrouter', 'claude-api', 'vitest', 'nodejs', 'rest-api'],
+    capabilities: ['cap-airtable-backend', 'cap-n8n-automation', 'cap-structured-output', 'cap-llm-integration', 'cap-rag', 'cap-frontend', 'cap-documentation'],
+    evidence: ['ev-pow-airtable', 'ev-pow-n8n'],
     reviewStatus: 'ok',
     reviewReason: null,
     source: 'this repository',

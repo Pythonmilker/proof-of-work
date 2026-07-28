@@ -191,6 +191,50 @@ async function main(): Promise<void> {
     snapshot.capabilities.map((c) => ({ key: c.id, fields: { Evidence: refs(c.evidence) } })),
   );
 
+  // Pass 3 — remove rows the seed no longer has. Opt-in, because a base is a place people add things by
+  // hand and a sync that silently deletes their work is a support ticket. Without it the base drifts:
+  // dropping a capability from the seed leaves it sitting in Airtable forever, still linked.
+  if (process.argv.includes('--prune')) {
+    console.log('\nPass 3: prune');
+    const seeded = new Set<string>([
+      ...snapshot.projects.map((p) => p.id),
+      ...snapshot.technologies.map((t) => t.id),
+      ...snapshot.capabilities.map((c) => c.id),
+      ...snapshot.evidence.map((e) => e.id),
+    ]);
+
+    for (const table of ['Technologies', 'Capabilities', 'Evidence', 'Projects']) {
+      const stale: string[] = [];
+      for (const [key, recordId] of recordByKey) {
+        if (seeded.has(key)) continue;
+        // Only prune keys this table actually owns: recordByKey is base-wide.
+        const owned = await call<{ records: Record_[] }>(
+          `${encodeURIComponent(table)}?pageSize=1&filterByFormula=${encodeURIComponent(`{Key}='${key}'`)}`,
+        );
+        if (owned.records.length > 0) stale.push(recordId);
+      }
+      for (let i = 0; i < stale.length; i += MAX_RECORDS_PER_WRITE) {
+        const chunk = stale.slice(i, i + MAX_RECORDS_PER_WRITE);
+        const query = chunk.map((id) => `records[]=${id}`).join('&');
+        await call(`${encodeURIComponent(table)}?${query}`, { method: 'DELETE' });
+      }
+      console.log(`  ${table}: ${stale.length} pruned`);
+    }
+  } else {
+    const orphans = [...recordByKey.keys()].filter(
+      (k) =>
+        !snapshot.projects.some((p) => p.id === k) &&
+        !snapshot.technologies.some((t) => t.id === k) &&
+        !snapshot.capabilities.some((c) => c.id === k) &&
+        !snapshot.evidence.some((e) => e.id === k) &&
+        !k.startsWith('role-'),
+    );
+    if (orphans.length > 0) {
+      console.log(`\n${orphans.length} row(s) in the base are not in the seed: ${orphans.join(', ')}`);
+      console.log('Re-run with --prune to delete them.');
+    }
+  }
+
   const unverified = snapshot.capabilities.filter((c) => c.evidence.length === 0).length;
   console.log(
     [

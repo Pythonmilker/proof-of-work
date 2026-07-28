@@ -92,8 +92,8 @@ describe('match against the seeded record', () => {
     expect(react.names).toContain('React');
   });
 
-  it('finds the three automation technologies the record is thin on', () => {
-    for (const term of ['Airtable', 'n8n', 'Zapier']) {
+  it('finds the two automation technologies the record is thin on', () => {
+    for (const term of ['Airtable', 'n8n']) {
       expect(best(term).score, term).toBe(1);
     }
   });

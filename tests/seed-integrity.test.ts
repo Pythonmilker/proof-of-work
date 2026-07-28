@@ -183,8 +183,8 @@ describe('referential integrity', () => {
     expect(snapshot.capabilities.some((c) => c.evidence.length === 0)).toBe(true);
   });
 
-  it('marks Airtable, n8n and Zapier as stretch, with this project as their only evidence', () => {
-    for (const id of ['cap-airtable-backend', 'cap-n8n-automation', 'cap-zapier']) {
+  it('marks Airtable and n8n as stretch, with this project as their only evidence', () => {
+    for (const id of ['cap-airtable-backend', 'cap-n8n-automation']) {
       const cap = snapshot.capabilities.find((c) => c.id === id);
       expect(cap?.tier, id).toBe('stretch');
       expect(cap?.projects, id).toEqual(['proof-of-work']);
