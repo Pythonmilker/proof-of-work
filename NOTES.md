@@ -120,8 +120,12 @@ the ingestion surface plus score trigger. Full spec with verified platform facts
 Implemented: env split + honest n8n probe + live-mode gating (confirmation card, base link-outs,
 no second fit report, no fixture counts over live data), VIEWS.md/INTERFACE.md rewritten as v2
 click-scripts with exact formulas, README/WRITEUP lead with Airtable, live screenshots captured.
-Remaining for Joel: the ~25 min VIEWS.md clicking (fields + shared view + incognito test), the
-~1 h INTERFACE.md pages, paste the share link into .env.local, three SaaS screenshots, the 75s film. A reusable skill pack from this build landed at
+DONE by Joel 2026-07-27: all VIEWS.md §A fields (Receipt, Verdict, Receipts rollup, three counting
+rollups reading 9/3/2, Verdict Summary) and the §B shared view. Share link verified ANONYMOUSLY by
+Claude from a never-logged-in browser: no login wall, six columns only, proven-first sort, live data.
+Link wired into .env.local; the confirmation card now shows the real Open-the-fit-report button.
+Remaining: the 1-hidden-field chip check in incognito (cosmetic), VIEWS.md §C operator views (3 min),
+INTERFACE.md pages (~1 h), three SaaS screenshots, the 75s film. A reusable skill pack from this build landed at
 _reference/skill-packs/airtable-n8n-backend/.
 
 ## Open
