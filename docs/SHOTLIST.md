@@ -87,15 +87,14 @@ than "new project".
 **No accounts needed.** Already captured as `02-fit-report.png`, with `03-gaps.png` framing the Gaps section
 on its own and `04-fit-report-tall.png` as a full-page version for the write-up.
 
-Match screen, "Score this role", then frame so the gauge and the Gaps section are both in view. Scroll so
-at least two gap rows are legible, including one with `Closest evidence: Airtable base as application
-backend`.
+Match screen, "Score this role", then frame so the gauge and the Gaps section are both in view. Both gap
+rows (the degree line and the collaborate-with-vendors line) should be legible.
 
 Expand one requirement row before capturing so the citation panel is open. A closed report is a list of
 verdicts; an open one shows the receipts, and the receipts are the argument.
 
-**Paste the real posting over the sample before this shot.** What ships is a reconstruction, labelled as
-one in `src/ui/sample-posting.ts` and under the text box.
+The bundled posting is the actual LinkedIn posting, captured 2026-07-28, so this shot needs no
+preparation.
 
 ## Optional sixth: the Slack message
 

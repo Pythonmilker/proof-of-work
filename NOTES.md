@@ -6,18 +6,21 @@ Progress anchor. Update at the end of each session.
 
 **Code complete and green.** 180 tests passing across 12 files, 3 skipped behind `LIVE_OPENROUTER=1`,
 `tsc --noEmit` clean, `pnpm verify` passes including the n8n drift check. Branch `feat/proof-of-work`,
-not pushed. Sample posting scores 78 percent: 9 proven, 3 partial, 2 gaps, 6 of 9 required proven.
+not pushed. The bundled posting is now the ACTUAL LinkedIn posting (job id 4444969099, captured
+2026-07-28); the record scores 75 percent against it: 10 proven, 4 partial, 2 gaps, 16 requirements,
+all of them required. The two gaps are the degree line and the collaborate-with-vendors line — both
+genuinely true — and Claude Code lands proven.
 
-**The Airtable base is live and seeded**, and both n8n workflows import into a real self-hosted instance.
-A match run against the real base scores 78% in 6.2s and writes 14 Results rows with their citations as
-real links. Outstanding: the Airtable views and Interface (click-scripts, ~17 min), the three SaaS
-screenshots, and the recording.
+**The Airtable base is live, seeded, and scored against the real posting.** One Roles row
+(`role-arootah-2026-07-28`, 75%), 16 Results rows with real citation links, stale rows deleted, and
+Joel's shared view returns all 16 with no filter repoint needed. Outstanding: Joel's Interface pages,
+the three SaaS screenshots, re-shot demo screenshots, and the recording.
 
 ## Done
 
 - `docs/DESIGN.md` — full end-to-end design, written before the build and kept current.
-- Five tables in `src/store/types.ts`, seeded from `src/store/seed.ts` with 6 projects, 44 technologies,
-  23 capabilities, 24 evidence rows, 158 links. Every metric traced to the portfolio ledger.
+- Six tables in `src/store/types.ts`, seeded from `src/store/seed.ts` with 7 projects, 44 technologies,
+  23 capabilities, 23 evidence rows. Every metric traced to the portfolio ledger.
 - OpenRouter layer with both traps guarded and tested against real request bodies.
 - Pipeline: extract, validate, link/dedup, match, score, rationale, orchestrator. Deterministic floor
   under every model call.
@@ -121,7 +124,7 @@ Implemented: env split + honest n8n probe + live-mode gating (confirmation card,
 no second fit report, no fixture counts over live data), VIEWS.md/INTERFACE.md rewritten as v2
 click-scripts with exact formulas, README/WRITEUP lead with Airtable, live screenshots captured.
 DONE by Joel 2026-07-27: all VIEWS.md §A fields (Receipt, Verdict, Receipts rollup, three counting
-rollups reading 9/3/2, Verdict Summary) and the §B shared view. Share link verified ANONYMOUSLY by
+rollups (now reading 10/4/2 against the real posting), Verdict Summary) and the §B shared view. Share link verified ANONYMOUSLY by
 Claude from a never-logged-in browser: no login wall, six columns only, proven-first sort, live data.
 Link wired into .env.local; the confirmation card now shows the real Open-the-fit-report button.
 Remaining: the 1-hidden-field chip check in incognito (cosmetic), VIEWS.md §C operator views (3 min),
@@ -134,8 +137,7 @@ _reference/skill-packs/airtable-n8n-backend/.
    `docs/SHOTLIST.md` has the exact shots. Create the views first (`airtable/VIEWS.md`) or shot 2 has
    nothing to show.
 2. **The recording**, 60 to 90 seconds. Script in `docs/DEMO-SCRIPT.md`.
-3. **Arootah statistics.** "700+ vetted advisors" and "600+ coaches" could not be found on their site and
-   are used nowhere. "18 functional disciplines" is confirmed and is used. Their site says "time-to-hire",
-   not "time-to-fill". Worth checking before repeating either figure in a cover letter.
-4. **The real posting** should be pasted over `src/ui/sample-posting.ts` before filming. What is there now
-   is a reconstruction, labelled as one in the file and in the UI.
+3. **Arootah statistics, resolved 2026-07-28.** "700+ vetted advisors" and "600+ coaches" are not on
+   arootah.com but ARE in the posting itself, so they are primary-sourced and safe to quote *with that
+   attribution* (e.g. "your posting mentions 700+ advisors"). `tests/seed-integrity.test.ts` encodes the
+   rule: allowed in the posting text, still banned from our own prose in `raw/`.

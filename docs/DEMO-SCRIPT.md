@@ -60,7 +60,7 @@ output that looks complete and is not.
 Press "Score this role". The posting is already in the box.
 
 > "The posting gets parsed into requirements, matched against the record in code, and scored in code.
-> 78 percent. Nine proven, three partial, two gaps."
+> 75 percent. Ten proven, four partial, two gaps."
 
 Expand one proven row.
 

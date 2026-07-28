@@ -34,7 +34,7 @@ const technologies: Technology[] = [
   { id: 'sql', name: 'SQL', aliases: ['sql'], category: 'language', projects: [] },
 
   // frameworks and runtimes
-  { id: 'react', name: 'React', aliases: ['react', 'react.js', 'reactjs', 'react 18', 'react 19'], category: 'framework', projects: [] },
+  { id: 'react', name: 'React', aliases: ['react', 'react.js', 'reactjs', 'react-based', 'react 18', 'react 19'], category: 'framework', projects: [] },
   { id: 'preact', name: 'Preact', aliases: ['preact'], category: 'framework', projects: [] },
   { id: 'nodejs', name: 'Node.js', aliases: ['node', 'node.js', 'nodejs'], category: 'framework', projects: [] },
   { id: 'electron', name: 'Electron', aliases: ['electron', 'electron 32', 'electron 41'], category: 'framework', projects: [] },
@@ -65,7 +65,7 @@ const technologies: Technology[] = [
   { id: 'sqlite-vec', name: 'sqlite-vec', aliases: ['sqlite-vec', 'vector index', 'vector database', 'vector store'], category: 'data', projects: [] },
 
   // ai
-  { id: 'claude-api', name: 'Claude API', aliases: ['claude', 'anthropic', 'claude api', 'anthropic api', 'claude agent sdk'], category: 'ai', projects: [] },
+  { id: 'claude-api', name: 'Claude API', aliases: ['claude', 'anthropic', 'claude api', 'anthropic api', 'claude agent sdk', 'claude code'], category: 'ai', projects: [] },
   { id: 'openai-api', name: 'OpenAI API', aliases: ['openai', 'gpt', 'gpt-4', 'openai api', 'chatgpt'], category: 'ai', projects: [] },
   { id: 'gemini', name: 'Google Gemini', aliases: ['gemini', 'google gemini', 'vertex'], category: 'ai', projects: [] },
   { id: 'openrouter', name: 'OpenRouter', aliases: ['openrouter'], category: 'ai', projects: [] },
@@ -133,7 +133,7 @@ const evidence: Evidence[] = [
   // to tick "n8n and/or Zapier" in a posting. n8n does the same job better, so the Zap was decoration,
   // and a decorative row in a record whose entire argument is that its claims are backed is worse than
   // an empty one. The posting still asks for Zapier; the record does not have it, and now says so.
-  { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '5 tables, 2 views and an Interface, provisioned from a single PAT via the Meta API', url: null, verifiedOn: VERIFIED, projects: ['proof-of-work'] },
+  { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '6 tables and a no-login shared fit-report view, provisioned from a single PAT via the Meta API', url: 'https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC', verifiedOn: VERIFIED, projects: ['proof-of-work'] },
   { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and checked for drift in CI', url: null, verifiedOn: VERIFIED, projects: ['proof-of-work'] },
 ];
 
@@ -235,7 +235,7 @@ const capabilities: Capability[] = [
     name: 'End-to-end test automation',
     statement: 'Maintains real browser suites alongside unit suites, and treats a green suite that hides a dead path as a bug.',
     tier: 'proven',
-    matchTerms: ['testing', 'test automation', 'e2e', 'end to end', 'playwright', 'qa', 'unit tests', 'test coverage'],
+    matchTerms: ['testing', 'test', 'debug', 'debugging', 'test automation', 'e2e', 'end to end', 'playwright', 'qa', 'unit tests', 'test coverage'],
     projects: ['tendril', 'north-star-support-bot', 'parastoria'],
     evidence: ['ev-tendril-e2e', 'ev-tendril-unit', 'ev-ns-tests', 'ev-parastoria-tests'],
   },

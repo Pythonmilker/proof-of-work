@@ -54,8 +54,8 @@ One schema rule does the rest: a capability with nothing linked to it is capped 
 however cleanly a requirement matches it. Adding a capability row is easy. Making it count requires
 attaching something a stranger can check.
 
-Against the sample posting the record scores 78 percent. Airtable, n8n and Zapier come out partial, with
-this project named as their only evidence, because that is what the record contains.
+Against the actual posting the record scores 75 percent. Airtable and n8n come out partial, with this
+project named as their only evidence, because that is what the record contains.
 
 ## Why Airtable
 

@@ -54,8 +54,9 @@ branches:
 | `01-tendril-readme.md` | Already on file | Dedup fires, the existing row updates |
 | `11-broken-fragment.txt` | Nothing checkable in it | Validation fails, row parked in Needs Review |
 
-Then open Match and press "Score this role". Against the sample posting the record scores 78 percent:
-9 requirements proven, 3 partial, 2 gaps, and 6 of the 9 required items proven.
+Then open Match and press "Score this role". The bundled posting is the actual Arootah posting, captured
+2026-07-28, and the record scores 75 percent against it: 10 of its 16 requirements proven, 4 partial,
+2 gaps. That posting marks everything as required, so the required tally is the whole tally.
 
 ## Going live
 
@@ -103,8 +104,8 @@ as proven, however cleanly a requirement matches it. Adding a capability row is 
 requires attaching something checkable. `tests/evidence-gate.test.ts` pins this at a perfect 1.0 match
 score, where the gate is the only thing deciding the outcome.
 
-The seed carries 1 capability with no evidence and 5 marked as stretch. Those 6 rows account for the
-3 partial verdicts in the sample report.
+The seed carries 1 capability with no evidence and 5 marked as stretch. Those 6 rows account for all
+4 partial verdicts in the report.
 
 ## The workflows
 
@@ -196,9 +197,9 @@ and misses capabilities a posting only describes. The header says `lexical` when
 The Zap polls on Zapier's schedule, up to 15 minutes on the free plan. A webhook trigger would be
 immediate and needs a paid plan.
 
-The sample posting in `src/ui/sample-posting.ts` is a reconstruction, not a copy. Its requirement list is
-real; its company paragraph is assembled from public site copy. Paste the actual posting over it before
-using a fit report for anything.
+The bundled posting in `src/ui/sample-posting.ts` is the actual LinkedIn posting, captured 2026-07-28,
+with the board chrome (tracking URLs, applicant counts) stripped and the pay/hours header line assembled
+from the posting's own figures. Scoring a different posting means pasting it into the box.
 
 ## Why Airtable
 

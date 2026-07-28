@@ -1,5 +1,5 @@
 /**
- * The local store — same five tables, no account required.
+ * The local store — same six tables, no account required.
  *
  * This exists so the whole thing runs for someone who has not signed up for anything. That is not a
  * convenience: a reviewer who has to create an Airtable account before they can see the demo mostly does

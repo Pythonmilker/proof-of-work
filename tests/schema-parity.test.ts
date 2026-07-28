@@ -1,7 +1,7 @@
 /**
  * The Airtable schema against the TypeScript types.
  *
- * Two definitions of the same five tables, in two languages, and nothing in either one stops them
+ * Two definitions of the same six tables, in two languages, and nothing in either one stops them
  * drifting. The failure mode is quiet and annoying: a field renamed in `types.ts` still reads fine in
  * the local store and comes back `undefined` from Airtable, so the app works in demo mode and loses a
  * column the moment someone connects a real base.

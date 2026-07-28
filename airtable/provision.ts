@@ -201,7 +201,7 @@ async function main(): Promise<void> {
     [
       '',
       'Next:',
-      '  pnpm airtable:push     seed the five tables and resolve every link',
+      '  pnpm airtable:push     seed the record tables and resolve every link',
       '  pnpm doctor            confirm the credentials actually work',
       '',
       `Two views still need creating by hand (Airtable has no API for them) — airtable/VIEWS.md`,

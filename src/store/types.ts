@@ -1,9 +1,10 @@
 /**
- * The five tables.
+ * The six tables.
  *
- * There are five on purpose and the count is a design constraint, not an accident — every extra table
- * costs a column in the Airtable screenshot and buys nothing. If something feels like a sixth table, it
- * is almost always a field or a view.
+ * The count is a design constraint, but the rule is legibility, not arithmetic — every table must earn
+ * its tab, and structure must never hide inside a long-text field to hold the count down. Results was
+ * the test case: it began as escaped JSON on Roles and became the sixth table, because a JSON blob
+ * disabled filtering, grouping and Interfaces on the one table holding the output.
  *
  * These types are the contract that the local JSON store and the Airtable adapter both satisfy, and the
  * shape the n8n workflows read and write. Change a field here and you owe an edit in three places:
@@ -179,7 +180,7 @@ export interface Role extends Provenance {
   model: string;
 }
 
-/** Everything a store holds. The Airtable adapter maps this 1:1 onto five tables. */
+/** Everything a store holds. The Airtable adapter maps this 1:1 onto six tables. */
 export interface Snapshot {
   projects: Project[];
   technologies: Technology[];

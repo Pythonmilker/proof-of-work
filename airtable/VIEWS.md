@@ -112,7 +112,7 @@ View menu → **Share view** → Create link.
 Open the link in a private window (logged out):
 
 - [ ] No login prompt, loads straight to the grid
-- [ ] Group counts visible (the 9 · 3 · 2 tally)
+- [ ] Group counts visible (the 10 · 4 · 2 tally)
 - [ ] Expand a row: only the six visible fields appear — **if hidden fields leak into the expanded
       record, stop and tell Claude; the share settings need a different approach**
 - [ ] Click an evidence URL from the rollup text: opens the Store listing / live site

@@ -128,20 +128,21 @@ describe('the raw fixtures agree with the seed', () => {
     }
   });
 
-  it('never quotes an Arootah statistic that could not be verified on their site', () => {
-    // "18 functional disciplines" is on the site and is used. "700+ advisors" and "600+ coaches" were
-    // not found there, so they appear nowhere in this project. Quoting a company's own numbers back at
-    // them incorrectly would be a strange thing to do inside a demo about verifiable claims.
-    // Only what a reader can actually see. The source file's own comment explains which figures were
-    // excluded and why, and it would otherwise trip this check by naming them.
-    const everything = [allRaw, SAMPLE_POSTING].join('\n');
-    expect(everything).not.toMatch(/700\+?\s*(vetted\s*)?advisors/i);
-    expect(everything).not.toMatch(/600\+?\s*coaches/i);
-    expect(everything).not.toMatch(/time-to-fill/i);
+  it("keeps the Arootah figures out of OUR prose, while the posting quotes its own", () => {
+    // "700+ vetted advisors" and "600+ coaches" are not on arootah.com (checked 2026-07-27) but ARE in
+    // the LinkedIn posting itself (captured 2026-07-28) — so the posting text may carry them, because
+    // they are the company quoting the company. Our own artifacts still may not: a figure we cannot
+    // source from the site or the posting stays out of our mouths.
+    expect(allRaw).not.toMatch(/700\+?\s*(vetted\s*)?advisors/i);
+    expect(allRaw).not.toMatch(/600\+?\s*coaches/i);
+    expect(allRaw).not.toMatch(/time-to-fill/i);
+    expect(SAMPLE_POSTING).toMatch(/700\+[\s\S]{0,3}vetted advisors/i);
+    expect(SAMPLE_POSTING).toMatch(/600\+ coaches/i);
   });
 
-  it('does use the one Arootah figure that is on their site', () => {
+  it('carries the posting verbatim, including the figure the site also confirms', () => {
     expect(SAMPLE_POSTING).toMatch(/18 functional disciplines/i);
+    expect(SAMPLE_POSTING).toMatch(/Claude Code/);
   });
 });
 

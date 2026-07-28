@@ -180,8 +180,20 @@ export function splitList(body: string): string[] {
     const words = p.split(/\s+/).filter(Boolean);
     return words.length > 0 && words.length <= 4 && !CLAUSE_OPENER.test(p);
   });
+  if (!listLike) return [body];
 
-  return listLike ? parts : [body];
+  /**
+   * Second guard, learned from the real posting: "Test, debug, and optimize applications for
+   * performance, reliability, and usability" passes the length test and is one requirement, while
+   * "React, TypeScript, and REST APIs" is three. The reliable difference in real postings is case —
+   * technology lists name proper nouns, verb lists are lowercase (the first word's capital is just the
+   * bullet's). So split only when a majority of parts beyond the first start with a capital or digit.
+   */
+  const rest = parts.slice(1);
+  const capitalised = rest.filter((p) => /^[A-Z0-9]/.test(p)).length;
+  if (capitalised * 2 < rest.length) return [body];
+
+  return parts;
 }
 
 /** "Arootah — part-time, remote" and "Engineer at Arootah" both name the company; catch either. */
@@ -189,7 +201,8 @@ function readCompany(lines: readonly string[]): string {
   for (const raw of lines.slice(0, 6)) {
     const line = raw.trim();
     if (!line) continue;
-    const dashed = /^([A-Z][\w&.'-]*(?:\s+[A-Z][\w&.'-]*){0,3})\s*[—–-]\s+\S/.exec(line);
+    // `·` included: "Arootah · Remote · $60/hr" is how job boards write the byline.
+    const dashed = /^([A-Z][\w&.'-]*(?:\s+[A-Z][\w&.'-]*){0,3})\s*[—–·-]\s+\S/.exec(line);
     if (dashed?.[1]) return dashed[1].trim();
     const at = /\bat\s+([A-Z][\w&.'-]*(?:\s+[A-Z][\w&.'-]*){0,3})/.exec(line);
     if (at?.[1]) return at[1].trim();
@@ -240,10 +253,14 @@ export function parseRoleDeterministically(text: string): ParsedRole {
       if (seen.has(key)) continue;
       seen.add(key);
 
+      // Markers are tested with parentheticals removed: "(React preferred)" states which framework
+      // they prefer, not that the requirement is optional, and it demoted a must-have on the real
+      // posting.
+      const forMarkers = cleaned.replace(/\([^)]*\)/g, ' ');
       requirements.push({
         id: `req-${requirements.length + 1}`,
         text: cleaned,
-        kind: PREFERRED_MARKERS.test(cleaned) ? 'preferred' : section,
+        kind: PREFERRED_MARKERS.test(forMarkers) ? 'preferred' : section,
         category: categorize(cleaned),
       });
     }

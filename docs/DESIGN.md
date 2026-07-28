@@ -64,12 +64,12 @@ password-protectable URL and replaces the grid link at the same journey step. No
 ## 4. The recruiter journey (max five steps, three clicks)
 
 1. **In the application email/PDF:** the screenshot of the Interface fit-report page — candidate name,
-   "Fit report — AI Product Engineer, {Company}", the verdict block "Meets 9 of 14 requirements in
-   full · 3 in part · 2 not covered", **green and red visible in the same frame** — and one link:
+   "Fit report — AI Product Engineer, {Company}", the verdict block "Meets 10 of 16 requirements in
+   full · 4 in part · 2 not covered", **green and red visible in the same frame** — and one link:
    "Check the evidence yourself."
-2. **The shared view opens, no login:** ~14 rows for *their posting only*. Required group above
+2. **The shared view opens, no login:** 16 rows for *their posting only*. Required group above
    Preferred. Columns: Requirement · Status (green/amber/red, "Not covered" not "gap") · Why ·
-   Evidence. Group counts give the 9-3-2 tally at a glance. Most recruiters stop here.
+   Evidence. Group counts give the 10-4-2 tally at a glance. Most recruiters stop here.
 3. **Click a row:** the expanded record shows the requirement, the status in words, the one-sentence
    Why, "What's missing" on non-proven rows, "Where it was done", and Evidence as flattened, dated
    URLs.
@@ -104,8 +104,8 @@ Share-to-web and deep links). Opened by URL, not by a picker. Top to bottom:
 
 1. Static header: candidate name (deliberately lives only here — no field holds it), "Fit report —
    {Title}, {Company}", "Scored {date} · against your posting as written".
-2. Verdict block: a `Verdict Summary` formula field rendered large — *"Meets 9 of 14 requirements in
-   full · 3 in part · 2 not covered"* — with "Overall match 78%" smaller beside it, footnote
+2. Verdict block: a `Verdict Summary` formula field rendered large — *"Meets 10 of 16 requirements in
+   full · 4 in part · 2 not covered"* — with "Overall match 75%" smaller beside it, footnote
    *"Must-haves count double."* The word "weighted" appears nowhere.
 3. The Results linked records as an inline list, grouped by Kind: Requirement · Status · Why ·
    Evidence.
@@ -732,9 +732,9 @@ evidence rows, 6 links`.
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  AI Product Engineer · Arootah                    ╭─────────╮    │
-│  matched 2026-07-27 · deterministic + code        │   78%   │    │
+│  matched 2026-07-28 · deterministic + code        │   75%   │    │
 │                                                   │ coverage│    │
-│  ██████████████████░░░░  9 proven · 3 partial     ╰─────────╯    │
+│  ██████████████████░░░░  10 proven · 4 partial    ╰─────────╯    │
 │                          · 2 gaps                                │
 ├──────────────────────────────────────────────────────────────────┤
 │ ● React                                              proven      │
