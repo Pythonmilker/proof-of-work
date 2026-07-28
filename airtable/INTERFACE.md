@@ -23,26 +23,31 @@ fields, which embeds a real list whose fields, sort and filter are configurable.
 **Interfaces → Create → Record review**, source table **Roles**. In the wizard, toggle on only
 `Title`, `Company`, `Score`, `Verdict Summary`, `Results`. Then, in edit mode:
 
-1. **Fields** (right panel → Data → Fields · gear): visible = `Title` (the page title, size X-Large),
-   `Verdict Summary`, `Score`, `Scored On` (built in step 4), `Company`, `Results`, in that order —
-   drag to reorder. Everything else off, especially `Key`, `Posted Text` and `Matched At` (a raw ISO
-   timestamp; `Scored On` is its readable face).
+1. **Fields** (right panel → Data → Fields · gear): visible = `Candidate` and `Scored On` (both
+   built in step 3), `Verdict Summary`, `Score`, `Company`, `Results`, in that order — drag to
+   reorder. `Title` goes **off** here: the X-Large page heading is driven by the separate *Title
+   field* setting, and leaving the row on prints the title twice. Everything else off too,
+   especially `Key`, `Posted Text` and `Matched At` (a raw ISO timestamp; `Scored On` is its
+   readable face).
 2. **Verdict block**
-   - Click `Verdict Summary` on the canvas — it is the headline; a fraction grades itself, a lone
-     percentage invites "is that good?".
-   - Click `Score` → properties → **Label** → override to `Overall match` (this renames it on this
-     page only). Then **Appearance → Helper text** → `Must-haves count double.`
-   - The word "weighted" must not appear anywhere on the page.
-3. **Name.** Rename the page itself to `Fit report — Joel Brannan` (left sidebar, page name).
-4. **Date, field-driven** (a hand-typed date goes stale on the next scoring run). In the **Data**
-   tab, on **Roles**, add a field `Scored On`, type **Formula**:
+   - `Verdict Summary` is the headline — a fraction grades itself; a lone percentage invites "is
+     that good?".
+   - Click `Score` → properties → **Label** → override to `Overall match` (renames it on this page
+     only). No footnote: the fraction above it is the explanation, and the word "weighted" must not
+     appear anywhere on the page.
+3. **Name and date, field-driven** (hand-typed page furniture goes stale; fields recompute on every
+   scoring run). In the **Data** tab, on **Roles**, add two Formula fields:
 
-   ```
-   DATETIME_FORMAT(DATETIME_PARSE({Matched At}), 'D MMM YYYY')
-   ```
+   - `Candidate` — the formula is just the constant `"Joel Brannan"` — so every scored posting
+     carries the name, including ones scored later on camera.
+   - `Scored On`:
 
-   Back on the interface page, toggle `Scored On` visible → Label override `Scored` → Helper text
-   `Against the posting as written.` It re-renders itself on every future run.
+     ```
+     DATETIME_FORMAT(DATETIME_PARSE({Matched At}), 'D MMM YYYY')
+     ```
+
+   The page name stays plain `Fit report`; with `Candidate` on the record, a name in the page title
+   would print it twice.
 4. **Requirement list**
    - Click `Results` → properties → **Appearance → Show as → View**, style **List**.
    - Click the embedded list on the canvas → **Data → Fields** → visible: `Requirement`, `Verdict`,
