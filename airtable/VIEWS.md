@@ -83,8 +83,9 @@ Fit report — Joel Brannan × Arootah
 
 1. **Filter:** `Role` `is` the Arootah posting record.
 2. **Group:** by `Kind` — drag **required** above **preferred**.
-3. **Sort** inside groups: `Verdict` A→Z (🟢 sorts first, then 🟠, then 🔴 — emoji sort is what makes
-   this work).
+3. **Sort** inside groups: by the raw `Status` field, **Z→A** — plain words sort deterministically
+   (proven → partial → gap), where emoji ordering is collation roulette. A hidden field can still
+   drive a sort.
 4. **Field order and visibility.** Visible, in this order — hide EVERYTHING else:
    - `Requirement`
    - `Verdict`
