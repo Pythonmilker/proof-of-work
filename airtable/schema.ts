@@ -1,9 +1,20 @@
 /**
  * The Airtable base, defined once.
  *
- * Five tables, and the count is a constraint rather than an accident — every extra table costs a column
- * in the screenshot and buys nothing. `tests/schema-parity.test.ts` checks these definitions against
- * `src/store/types.ts` so the two cannot drift.
+ * Six tables, small enough to read in one screenshot. It was five, and the sixth is a correction worth
+ * recording: `Roles` used to hold its requirements and results as escaped JSON inside two long-text
+ * fields, to protect a self-imposed five-table rule whose stated cost was "every extra table costs a
+ * column in the screenshot".
+ *
+ * That reasoning was wrong twice. Airtable renders tables as horizontal tabs, so six versus five is
+ * visually identical. And JSON in a long-text field disables everything Airtable is for: you cannot
+ * filter to the roles where n8n came out a gap, cannot group by status, cannot colour a status cell,
+ * cannot fire an automation on a gap, and cannot build the requirement grid in an Interface. It also
+ * broke the link graph at the one table holding the output, since the cited projects and receipts were
+ * slugs buried in a string rather than links.
+ *
+ * `tests/schema-parity.test.ts` checks these definitions against `src/store/types.ts` so the two cannot
+ * drift.
  *
  * ## The two-pass problem
  *
@@ -140,7 +151,7 @@ export const TABLES: TableSpec[] = [
   },
   {
     name: 'Roles',
-    description: 'Pasted job descriptions and their scored results. Roles and matches share one table.',
+    description: 'Pasted job descriptions. One row per posting scored against the record.',
     fields: [
       { name: 'Title', type: 'singleLineText' },
       KEY_FIELD,
@@ -150,13 +161,45 @@ export const TABLES: TableSpec[] = [
         type: 'multilineText',
         description: 'The posting verbatim, so any result can be re-derived later.',
       },
-      { name: 'Requirements', type: 'multilineText' },
-      { name: 'Results', type: 'multilineText' },
       number('Score', '0-100, computed in code. Never produced by a model.'),
+      number('Requirement Count'),
       { name: 'Matched At', type: 'singleLineText' },
       { name: 'Model', type: 'singleLineText', description: 'Which model wrote the rationales, or "none".' },
       { name: 'Source', type: 'singleLineText' },
       { name: 'Ingested At', type: 'singleLineText' },
+    ],
+  },
+  {
+    name: 'Results',
+    description:
+      'One row per requirement per role. The fit report, as records rather than as a JSON blob.',
+    fields: [
+      {
+        name: 'Requirement',
+        type: 'singleLineText',
+        description: 'The requirement text, denormalised so the row reads on its own.',
+      },
+      KEY_FIELD,
+      select('Kind', ['required', 'preferred'], 'Required items are weighted double when scoring.'),
+      select('Category', [
+        'frontend',
+        'backend',
+        'automation',
+        'ai',
+        'data',
+        'cloud',
+        'process',
+        'domain',
+      ]),
+      select('Status', ['proven', 'partial', 'gap'], 'Colour this green/amber/red. It is the whole report.'),
+      {
+        name: 'Shortfall',
+        type: 'multilineText',
+        description: 'Why this is not proven. Empty when it is. The Gaps view reads this.',
+      },
+      { name: 'Match Score', type: 'number', options: { precision: 2 } },
+      { name: 'Rationale', type: 'multilineText' },
+      select('Rationale Source', ['model', 'template'], 'Which wrote the sentence: a model, or code.'),
     ],
   },
 ];
@@ -178,6 +221,18 @@ export const LINKS: LinkSpec[] = [
     linkedTable: 'Evidence',
     description: 'Empty here means unverified. Such a capability can never score as proven.',
   },
+
+  // The citations, as links rather than as slugs inside a string. This is what the sixth table bought.
+  { table: 'Results', field: 'Role', linkedTable: 'Roles' },
+  { table: 'Results', field: 'Technologies', linkedTable: 'Technologies' },
+  { table: 'Results', field: 'Capabilities', linkedTable: 'Capabilities' },
+  { table: 'Results', field: 'Projects', linkedTable: 'Projects' },
+  {
+    table: 'Results',
+    field: 'Evidence',
+    linkedTable: 'Evidence',
+    description: 'The receipts behind this verdict. Empty on a gap, and on a partial that failed the gate.',
+  },
 ];
 
 /** Views a recruiter or an operator would actually open. */
@@ -194,6 +249,25 @@ export const VIEWS = [
     description: 'Extraction failed on these. The operator view, and proof the error branch is real.',
     filter: '{Review Status} = "needs-review"',
   },
+  {
+    table: 'Results',
+    name: 'Gaps',
+    description:
+      'Everything a role asked for that the record does not cover, required first. Impossible while ' +
+      'results lived in a JSON string, which is the clearest argument for the sixth table.',
+    filter: '{Status} != "proven"',
+  },
 ] as const;
+
+/**
+ * `Score` on Roles stays a plain number written by the pipeline, rather than an Airtable rollup over
+ * Results.
+ *
+ * A rollup would look tidier in the base and would move the arithmetic into Airtable, where a formula
+ * edit could silently change a published score. Scoring in code, verified by `tests/score.test.ts`, is
+ * the architectural claim; the base stores the answer and does not compute it. Convert it by hand later
+ * if you want Airtable to own the number.
+ */
+export const SCORE_IS_NOT_A_ROLLUP = true;
 
 export const BASE_NAME = 'Proof of Work';

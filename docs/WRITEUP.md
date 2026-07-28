@@ -11,7 +11,7 @@ with sample contacts.
 
 ## Stack
 
-React and TypeScript on the front. Airtable as the application backend: five tables, two recruiter views,
+React and TypeScript on the front. Airtable as the application backend: six tables, three views,
 one Interface dashboard, created from a single access token by `pnpm airtable:provision`. Two n8n
 workflows carry the pipeline, committed as JSON and generated from the TypeScript that also runs them
 locally. One Zap sends a Slack notification when a new fit report is written.
@@ -86,9 +86,10 @@ set but rejected reports as rejected. Full setup is in the README.
 The rationale model is called once per report rather than once per requirement, so with a key set the
 generated sentences are less specific than the deterministic templates they replace on some rows.
 
-The Airtable Interface cannot expand the `Results` field into a table, because results are stored as JSON
-in one long-text field. Splitting them into their own table would fix the Interface and break the
-five-table constraint. `airtable/INTERFACE.md` documents the three options.
+No Airtable base has been created against a real account yet. The schema, the provisioning script and the
+seeding script are written and unit-tested, so every field spec in `airtable/schema.ts` reads correct and
+has not been executed. The n8n workflows, by contrast, have been imported into a real self-hosted
+instance and round-tripped back out intact.
 
 Retrieval without a key is lexical plus token overlap. It matches technologies a posting names literally
 and misses capabilities a posting only describes.
@@ -100,7 +101,7 @@ Three of the eight screenshots need live n8n and Airtable accounts, so they are 
 
 ## Numbers
 
-170 tests across 12 files, typecheck clean. 9,354 lines of TypeScript across 47 files, counted with
+180 tests across 12 files, typecheck clean. 9,354 lines of TypeScript across 47 files, counted with
 `git ls-files "*.ts" "*.tsx" | xargs wc -l`. 6 projects, 44 technologies, 23 capabilities, 24 evidence
-rows, 158 links. Two workflows, 27 nodes between them. 11 raw artifacts committed so the before-and-after
+rows, 158 links. Two workflows, 36 nodes between them, verified to import and round-trip in a real n8n. 11 raw artifacts committed so the before-and-after
 is reproducible. The static build is 304 kB, 98 kB gzipped.

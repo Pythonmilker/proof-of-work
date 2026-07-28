@@ -2,12 +2,15 @@
  * Captures every screenshot that needs no accounts.  `pnpm screenshots`
  *
  * Scripted rather than taken by hand so they can be regenerated. The likeliest reason to reshoot is
- * pasting the real job posting over the sample, and re-framing two screenshots by hand every time is how
- * a deliverable ends up with one current image and one stale one.
+ * pasting the real job posting over the sample, and re-framing a set of screenshots by hand every time
+ * is how a deliverable ends up with one current image and one stale one.
  *
- * Writes nine PNGs to docs/screenshots/. Needs the dev server running on 5273, and a reset first
- * (`rm -f data/session.json`) or the dedup branch fires where the shot expects a fresh record. The three
- * shots that need live n8n and Airtable accounts are described in docs/SHOTLIST.md.
+ * Writes to docs/screenshots/. Needs the dev server on 5273 and a reset first (`rm -f data/session.json`)
+ * or the dedup branch fires where a shot expects a fresh record. The three shots that need live n8n and
+ * Airtable accounts are described in docs/SHOTLIST.md.
+ *
+ * Shot order follows the reviewer's path, not the pipeline's: the fit report first, because that is what
+ * the app now opens on and what a hiring manager should see in the first frame.
  */
 
 import { mkdirSync } from 'node:fs';
@@ -23,9 +26,8 @@ async function settle(page: Page, ms = 400): Promise<void> {
   await page.waitForTimeout(ms);
 }
 
-async function shoot(page: Page, name: string, selector?: string): Promise<void> {
-  const target = selector ? page.locator(selector).first() : page;
-  await target.screenshot({ path: join(OUT, `${name}.png`) });
+async function shoot(page: Page, name: string): Promise<void> {
+  await page.screenshot({ path: join(OUT, `${name}.png`) });
   console.log(`  wrote docs/screenshots/${name}.png`);
 }
 
@@ -47,59 +49,48 @@ async function main(): Promise<void> {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await settle(page);
 
-  // ── 1. Intake, before anything has been ingested ────────────────────────────────────────────────
-  await shoot(page, '01-intake');
+  // ── 1. The landing screen: the product sentence and a pre-filled posting ────────────────────────
+  await shoot(page, '01-landing');
 
-  // ── 2. Before and after, from a real README ─────────────────────────────────────────────────────
+  // ── 2. The scored report, first citation panel already open ─────────────────────────────────────
+  await page.getByRole('button', { name: 'Score this role' }).click();
+  await page.waitForSelector('text=what this record does not cover', { timeout: 120_000 });
+  await settle(page, 600);
+  await shoot(page, '02-fit-report');
+
+  // ── 3. The Gaps section, framed on its own ──────────────────────────────────────────────────────
+  await page.locator('.gaps').scrollIntoViewIfNeeded();
+  await settle(page, 300);
+  await shoot(page, '03-gaps');
+
+  await page.screenshot({ path: join(OUT, '04-fit-report-tall.png'), fullPage: true });
+  console.log('  wrote docs/screenshots/04-fit-report-tall.png');
+
+  // ── 4. Intake, before anything has been ingested ────────────────────────────────────────────────
+  await page.getByRole('button', { name: 'Add evidence', exact: true }).click();
+  await settle(page, 300);
+  await shoot(page, '05-intake');
+
+  // ── 5. Before and after, from a real README ─────────────────────────────────────────────────────
   await page.getByRole('button', { name: /01-tendril-readme/ }).click();
   await settle(page, 200);
   await page.getByRole('button', { name: 'Ingest', exact: true }).click();
   await page.waitForSelector('text=Before — raw input', { timeout: 30_000 });
   await settle(page);
-
   await page.getByText('Before — raw input').scrollIntoViewIfNeeded();
   await settle(page, 250);
-  await shoot(page, '02-before-after');
+  await shoot(page, '06-before-after');
 
-  // ── 3. The stage list, with dedup having fired ──────────────────────────────────────────────────
-  await page.getByText('PIPELINE', { exact: false }).first().scrollIntoViewIfNeeded();
-  await settle(page, 250);
-  await shoot(page, '03-pipeline-stages');
-
-  // ── 4. The error branch ─────────────────────────────────────────────────────────────────────────
+  // ── 6. The error branch: a rejection renders as a rejection ─────────────────────────────────────
   await page.getByRole('button', { name: /11-broken-fragment/ }).click();
   await settle(page, 200);
   await page.getByRole('button', { name: 'Ingest', exact: true }).click();
   await page.waitForSelector('text=parked in Needs Review', { timeout: 30_000 });
   await settle(page);
-  await shoot(page, '04-needs-review');
+  await shoot(page, '07-needs-review');
 
-  // ── 5. The fit report, one row expanded, Gaps in frame ──────────────────────────────────────────
-  await page.getByRole('button', { name: 'Match', exact: true }).click();
-  await settle(page, 200);
-  await page.getByRole('button', { name: 'Score this role' }).click();
-  await page.waitForSelector('text=what this record does not cover', { timeout: 120_000 });
-  await settle(page, 600);
-
-  // Expand the Airtable row: a closed report is a list of verdicts, an open one shows the receipts.
-  const airtableRow = page.locator('.req-head', { hasText: 'Airtable' }).first();
-  if (await airtableRow.count()) {
-    await airtableRow.click();
-    await settle(page, 300);
-  }
-
-  await shoot(page, '05-fit-report-full');
-
-  await page.locator('.gaps').scrollIntoViewIfNeeded();
-  await settle(page, 300);
-  await shoot(page, '06-gaps');
-
-  // Full-page version, for the write-up rather than the application.
-  await page.screenshot({ path: join(OUT, '07-fit-report-tall.png'), fullPage: true });
-  console.log('  wrote docs/screenshots/07-fit-report-tall.png');
-
-  // ── 6. The record browser ───────────────────────────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'Record', exact: true }).click();
+  // ── 7. The record browser ───────────────────────────────────────────────────────────────────────
+  await page.getByRole('button', { name: 'The record', exact: true }).click();
   await settle(page, 400);
   await shoot(page, '08-record-projects');
 

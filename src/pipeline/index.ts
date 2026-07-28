@@ -311,7 +311,11 @@ export async function matchRole(
 
     results.push({
       requirementId: requirement.id,
+      requirementText: requirement.text,
+      kind: requirement.kind,
+      category: requirement.category,
       status: resolution.status,
+      shortfall: resolution.shortfall,
       score: Number(found.best.toFixed(3)),
       matchedTechnologies: resolution.matchedTechnologies,
       matchedCapabilities: resolution.matchedCapabilities,

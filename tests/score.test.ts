@@ -13,7 +13,11 @@ function req(id: string, kind: Requirement['kind']): Requirement {
 function result(id: string, status: RequirementResult['status']): RequirementResult {
   return {
     requirementId: id,
+    requirementText: `requirement ${id}`,
+    kind: 'required',
+    category: 'process',
     status,
+    shortfall: status === 'proven' ? null : 'thin',
     score: status === 'gap' ? 0 : 1,
     matchedTechnologies: [],
     matchedCapabilities: [],

@@ -4,7 +4,7 @@ Progress anchor. Update at the end of each session.
 
 ## Current status
 
-**Code complete and green.** 170 tests passing across 12 files, 3 skipped behind `LIVE_OPENROUTER=1`,
+**Code complete and green.** 180 tests passing across 12 files, 3 skipped behind `LIVE_OPENROUTER=1`,
 `tsc --noEmit` clean, `pnpm verify` passes including the n8n drift check. Branch `feat/proof-of-work`,
 not pushed. Sample posting scores 78 percent: 9 proven, 3 partial, 2 gaps, 6 of 9 required proven.
 
@@ -21,7 +21,8 @@ runs with no credentials.
   under every model call.
 - React app: intake with a live stage list, before/after, fit report with citations and Gaps, record
   browser. Runs in the browser with no server on the static build.
-- Two n8n workflows generated from source, 27 nodes, drift-checked in `pnpm verify`.
+- Two n8n workflows generated from source, 36 nodes, drift-checked in `pnpm verify`, and verified to
+  import and round-trip in a real self-hosted n8n.
 - Airtable provisioning and seeding from one token, idempotent, plus view and Interface click-scripts.
 - Zap recipe with a testable sample payload.
 - README through the `technical-writing` skill; grep pass re-run and clean.

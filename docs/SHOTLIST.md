@@ -73,7 +73,7 @@ counter at 1 after ingesting `raw/11-broken-fragment.txt`.
 
 ## 4. Raw blob against structured record  (PICK)
 
-**No accounts needed.** Already captured as `02-before-after.png`.
+**No accounts needed.** Already captured as `06-before-after.png`.
 
 Intake screen. Click `01-tendril-readme.md`, press Ingest, scroll to the before-and-after panel. Left is
 2,471 characters of prose; right is the structured record with the metrics, the chips and the receipts.
@@ -84,8 +84,8 @@ than "new project".
 
 ## 5. The fit report with Gaps  (PICK)
 
-**No accounts needed.** Already captured as `05-fit-report-full.png`, with `06-gaps.png` framing the Gaps
-section on its own and `07-fit-report-tall.png` as a full-page version for the write-up.
+**No accounts needed.** Already captured as `02-fit-report.png`, with `03-gaps.png` framing the Gaps section
+on its own and `04-fit-report-tall.png` as a full-page version for the write-up.
 
 Match screen, "Score this role", then frame so the gauge and the Gaps section are both in view. Scroll so
 at least two gap rows are legible, including one with `Closest evidence: Airtable base as application

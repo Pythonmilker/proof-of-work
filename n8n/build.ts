@@ -78,13 +78,30 @@ function node(
   return { id: idFor(name), name, type, typeVersion, position, parameters, ...(credentials ? { credentials } : {}) };
 }
 
+/**
+ * `responseNode` rather than `lastNode`, and the difference matters once the workflow branches.
+ *
+ * With `lastNode` the HTTP response is whatever node happened to finish last, which in a workflow with a
+ * success path and an error path is ambiguous. `responseNode` names the responder explicitly, so both
+ * branches can answer with their own shape and neither depends on execution order.
+ *
+ * Value verified against the installed Webhook node source, which offers exactly:
+ * onReceived | lastNode | responseNode | streaming.
+ */
 const webhook = (name: string, path: string, position: Position) =>
   node(name, 'n8n-nodes-base.webhook', 2, position, {
     path,
     options: {},
     httpMethod: 'POST',
-    // The last node's output is the HTTP response, so no Respond-to-Webhook node is needed.
-    responseMode: 'lastNode',
+    responseMode: 'responseNode',
+  });
+
+/** Version 1.5, the newest the installed n8n-nodes-base offers ([1, 1.1, 1.2, 1.3, 1.4, 1.5]). */
+const respond = (name: string, position: Position, body: string, code = 200) =>
+  node(name, 'n8n-nodes-base.respondToWebhook', 1.5, position, {
+    respondWith: 'json',
+    responseBody: body,
+    options: { responseCode: code },
   });
 
 const code = (name: string, position: Position, jsCode: string) =>
@@ -116,11 +133,28 @@ const airtable = (name: string, position: Position, parameters: Record<string, u
     position,
     {
       base: { __rl: true, mode: 'id', value: '={{ $env.AIRTABLE_BASE_ID }}' },
-      options: {},
+      // typecast lets a linked-record field be written as the target's primary-field string rather than
+      // its opaque record id, which is the only thing that makes linking practical inside a workflow.
+      options: { typecast: true },
       ...parameters,
     },
     AIRTABLE_CREDENTIALS,
   );
+
+/** An upsert keyed on our stable slug. Every write in these workflows is one of these. */
+const upsert = (name: string, table: string, position: Position) =>
+  airtable(name, position, {
+    operation: 'upsert',
+    table: { __rl: true, mode: 'name', value: table },
+    columns: { mappingMode: 'autoMapInputData', matchingColumns: ['Key'], value: {} },
+  });
+
+const loadAll = (name: string, table: string, position: Position) =>
+  airtable(name, position, {
+    operation: 'search',
+    table: { __rl: true, mode: 'name', value: table },
+    returnAll: true,
+  });
 
 const ifNode = (name: string, position: Position, leftValue: string) =>
   node(name, 'n8n-nodes-base.if', 2.2, position, {
@@ -159,8 +193,43 @@ function connect(pairs: Array<[from: string, to: string, outputIndex?: number]>)
   return out;
 }
 
+/**
+ * A stable 16-character workflow id, in n8n's nanoid alphabet.
+ *
+ * Not decoration. `n8n import:workflow --input=file.json` fails outright without one:
+ *
+ *     SQLITE_CONSTRAINT: NOT NULL constraint failed: workflow_entity.id
+ *
+ * The editor generates an id when you paste or upload, so a workflow can look perfectly importable in
+ * the UI and be unusable from the command line. Deriving it from the name rather than randomising keeps
+ * the drift check meaningful and makes re-importing update the same workflow instead of creating a
+ * second copy.
+ */
+function workflowId(name: string): string {
+  const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let hash = 0x811c9dc5;
+  let out = '';
+  for (let i = 0; i < 16; i += 1) {
+    for (const ch of `${name}:${i}`) {
+      hash ^= ch.charCodeAt(0);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    out += ALPHABET[hash % ALPHABET.length];
+  }
+  return out;
+}
+
 function workflow(name: string, nodes: N8nNode[], connections: Connections): Record<string, unknown> {
-  return { name, nodes, connections, pinData: {}, meta: { templateCredsSetupCompleted: false } };
+  return {
+    id: workflowId(name),
+    name,
+    nodes,
+    connections,
+    pinData: {},
+    settings: { executionOrder: 'v1' },
+    active: false,
+    meta: { templateCredsSetupCompleted: false },
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -334,25 +403,111 @@ return [{
 }];`;
 }
 
-function dedupNode(): string {
-  return `// Dedup. Slug equality catches the same file pasted twice; an overlapping name catches "Tendril"
-// against "Tendril — agent-first IDE", which is what happens when two artifacts describe one project.
-//
-// Getting this wrong permissively merges two real projects. Getting it wrong strictly splits one
-// project's evidence across two rows — and that is the failure that makes a capability look unverified
-// when it is not. So the threshold leans permissive and the merge is non-destructive.
-const validated = $('Validate extraction').first().json;
-const existing = $input.all().map((i) => i.json).filter((r) => r && r.fields);
+/**
+ * Resolve the extraction's loose strings against the taxonomy already in the base.
+ *
+ * Without this the workflow creates a duplicate row for every technology whose slug does not happen to
+ * equal its seeded Key: `slugify('Node.js')` is `node-js` while the seeded row is `nodejs`, so an upsert
+ * matching on Key would miss and write a second Node.js. The local pipeline resolves through the alias
+ * table; this is the same job with the aliases read out of Airtable.
+ */
+function resolveTaxonomyNode(): string {
+  return `const validated = $('Validate extraction').first().json;
 
-const slug = validated.project.key;
-const match = existing.find((r) => r.fields.Key === slug);
+const rows = (name) => $(name).all().map((i) => i.json).filter((r) => r && r.fields);
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9+#./\\s-]+/g, ' ').replace(/\\s+/g, ' ').trim();
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-\$/g, '');
+const csv = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
+
+const techRows = rows('Load technologies');
+const capRows = rows('Load capabilities');
+
+// Existing row wins. A name that matches an existing row by name OR by alias links to it; anything left
+// over is genuinely new and gets created with a proper Key so the record stays readable.
+const matchTech = (raw) => techRows.find((r) =>
+  [r.fields.Name].concat(csv(r.fields.Aliases)).some((a) => norm(a) === norm(raw)));
+const matchCap = (raw) => capRows.find((r) =>
+  [r.fields.Name].concat(csv(r.fields['Match Terms'])).some((a) => norm(a) === norm(raw)));
+
+// DELIBERATE DIFFERENCE FROM THE APPLICATION PATH, and worth knowing before you compare them.
+//
+// src/pipeline/link.ts creates a row for a technology or capability the taxonomy has never seen. This
+// workflow does not: it links what already exists and returns the rest under 'unresolved' for a person
+// to add. The reason is ordering. Creating a row and linking to it in the same run means the link write
+// can land before the row write, at which point typecast creates a second, keyless row and you have a
+// duplicate that read() then skips. Reporting instead of guessing is the smaller, more honest surface.
+const techNames = [];
+const capNames = [];
+const unresolved = [];
+
+for (const raw of validated.stack || []) {
+  const hit = matchTech(raw);
+  if (!hit) { if (!unresolved.includes(raw)) unresolved.push(raw); continue; }
+  if (!techNames.includes(hit.fields.Name)) techNames.push(hit.fields.Name);
+}
+
+for (const raw of validated.capabilities || []) {
+  const hit = matchCap(raw);
+  if (!hit) { if (!unresolved.includes(raw)) unresolved.push(raw); continue; }
+  if (!capNames.includes(hit.fields.Name)) capNames.push(hit.fields.Name);
+}
+
+return [{ json: { techNames, capNames, unresolved, projectName: validated.project.Name, slugOf: slug('') } }];`;
+}
+
+/**
+ * One n8n item per Evidence row, each carrying its Projects link.
+ *
+ * Two separate bugs lived here. n8n writes one Airtable record per ITEM, so a single item carrying an
+ * `evidence` array wrote exactly one row however many receipts the extraction found. And the rows had no
+ * Projects link at all, so they landed in the base as orphans — in a base whose entire point is the link
+ * graph, and whose "Proven Capabilities" view filters on `COUNTA({Evidence}) > 0`.
+ *
+ * The link is written as the project's NAME, not its record id, and the Airtable node runs with
+ * `typecast: true`. Airtable then resolves a linked-record value given as a primary-field string, which
+ * removes the need to thread record ids through the workflow.
+ */
+function fanOutEvidenceNode(): string {
+  return `const validated = $('Validate extraction').first().json;
+const projectKey = validated.project.key;
+const projectName = validated.project.Name;
+const today = new Date().toISOString().slice(0, 10);
+
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-\$/g, '');
+
+return (validated.evidence || []).map((e) => ({
+  json: {
+    Key: ('ev-' + projectKey + '-' + slug(e.label) + '-' + slug(e.value).slice(0, 24)).slice(0, 96),
+    Label: e.label,
+    Kind: e.kind,
+    Value: e.value,
+    URL: e.url || '',
+    'Verified On': today,
+    Projects: [projectName],
+  },
+}));`;
+}
+
+/**
+ * The Project row, with its taxonomy links attached in the same write.
+ *
+ * Linked-record fields are given as primary-field strings and the node runs with `typecast: true`;
+ * Airtable resolves them to record ids, which removes any need to thread opaque ids through the
+ * workflow. Verified against the installed node source: `options.typecast` becomes `body.typecast`, and
+ * `matchingColumns: ['Key']` becomes Airtable's native `performUpsert.fieldsToMergeOn`.
+ */
+function projectRowNode(): string {
+  return `const validated = $('Validate extraction').first().json;
+const resolved = $('Resolve taxonomy').first().json;
+
+const { key, ...fields } = validated.project;
 
 return [{
   json: {
-    ...validated,
-    duplicateOf: match ? match.id : null,
-    action: match ? 'update' : 'create',
-    airtableRecordId: match ? match.id : null,
+    Key: key,
+    ...fields,
+    Technologies: resolved.techNames,
+    Capabilities: resolved.capNames,
   },
 }];`;
 }
@@ -368,7 +523,10 @@ const label = 'Unparsed: ' + failure.sourceName;
 
 return [{
   json: {
-    key: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+    // 'Key', not 'key'. autoMapInputData matches Airtable column names exactly and matchingColumns is
+    // ["Key"], so a lower-case key never matches and the parked record is never written. The error
+    // branch would itself have failed silently, which would have been a particularly bad joke.
+    Key: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
     Name: label,
     Status: 'in-development',
     Summary: 'Extraction did not produce a usable record from ' + failure.sourceName + '.',
@@ -404,53 +562,53 @@ const extractWorkflow = (() => {
     code('Validate extraction', [620, 260], validateNode()),
     ifNode('Usable record?', [840, 260], '={{ $json.valid }}'),
 
-    airtable('Find existing project', [1080, 140], {
-      operation: 'search',
-      table: { __rl: true, mode: 'name', value: 'Projects' },
-      returnAll: false,
-      limit: 100,
-      filterByFormula: "={{ '{Key} = \"' + $json.project.key + '\"' }}",
-    }),
-    code('Merge or create', [1300, 140], dedupNode()),
-    airtable('Write project', [1520, 140], {
-      operation: 'upsert',
-      table: { __rl: true, mode: 'name', value: 'Projects' },
-      columns: {
-        mappingMode: 'autoMapInputData',
-        matchingColumns: ['Key'],
-        value: {},
-      },
-    }),
-    airtable('Write evidence rows', [1740, 140], {
-      operation: 'upsert',
-      table: { __rl: true, mode: 'name', value: 'Evidence' },
-      columns: { mappingMode: 'autoMapInputData', matchingColumns: ['Key'], value: {} },
-    }),
-    code('Respond', [1960, 140],
-      `// The last node's output is the HTTP response (webhook responseMode: lastNode).\n` +
-      `const validated = $('Merge or create').first().json;\n` +
-      `return [{ json: {\n` +
+    loadAll('Load technologies', 'Technologies', [1080, 60]),
+    loadAll('Load capabilities', 'Capabilities', [1300, 60]),
+    code('Resolve taxonomy', [1520, 60], resolveTaxonomyNode()),
+    code('Build project row', [1740, 60], projectRowNode()),
+    upsert('Write project', 'Projects', [1960, 60]),
+
+    code('Fan out evidence', [2180, 180], fanOutEvidenceNode()),
+    upsert('Write evidence rows', 'Evidence', [2400, 180]),
+
+    respond('Respond', [2180, -40],
+      `={{ {\n` +
       `  ok: true,\n` +
-      `  action: validated.action,\n` +
-      `  duplicateOf: validated.duplicateOf,\n` +
-      `  project: validated.project.Name,\n` +
-      `  warnings: validated.warnings,\n` +
-      `  evidenceWritten: (validated.evidence || []).length,\n` +
-      `} }];`),
+      `  project: $('Build project row').first().json.Name,\n` +
+      `  key: $('Build project row').first().json.Key,\n` +
+      `  technologiesLinked: $('Resolve taxonomy').first().json.techNames.length,\n` +
+      `  capabilitiesLinked: $('Resolve taxonomy').first().json.capNames.length,\n` +
+      `  unresolved: $('Resolve taxonomy').first().json.unresolved,\n` +
+      `  evidenceWritten: ($('Validate extraction').first().json.evidence || []).length,\n` +
+      `  warnings: $('Validate extraction').first().json.warnings\n` +
+      `} }}`),
 
     code('Build review row', [1080, 420], reviewStubNode()),
-    airtable('Write Needs Review', [1300, 420], {
-      operation: 'upsert',
-      table: { __rl: true, mode: 'name', value: 'Projects' },
-      columns: { mappingMode: 'autoMapInputData', matchingColumns: ['Key'], value: {} },
-    }),
+    upsert('Write Needs Review', 'Projects', [1300, 420]),
+    respond('Rejected', [1520, 420],
+      `={{ {\n` +
+      `  ok: false,\n` +
+      `  parked: $('Build review row').first().json.Name,\n` +
+      `  reason: $('Build review row').first().json['Review Reason']\n` +
+      `} }}`, 422),
 
-    sticky('Error branch note', [1040, 560], [480, 190],
+    sticky('Error branch note', [1040, 560], [480, 210],
       `### Needs Review — the error branch\n\n` +
       `Nothing is dropped here. A failed extraction becomes a Project row with \`Review Status\`\n` +
-      `set to \`needs-review\` and the validator's problem list in \`Review Reason\`.\n\n` +
+      `set to \`needs-review\` and the validator's problem list in \`Review Reason\`, then answers 422.\n\n` +
       `\`retryable\` distinguishes a malformed reply (worth asking again) from a source that simply\n` +
       `contained no project (asking again spends money to fail identically).`),
+
+    sticky('Linking note', [1900, 320], [520, 250],
+      `### How the links get written\n\n` +
+      `Every write is an **upsert matched on \`Key\`**, which is Airtable's own \`performUpsert\`\n` +
+      `— so the dedup is the write, not a separate lookup node.\n\n` +
+      `Linked-record fields are written as the target's **primary-field name**, not its record id,\n` +
+      `because these nodes run with \`typecast: true\`. That is what lets a Project link to\n` +
+      `"React" and an Evidence row link back to its Project without threading \`rec…\` ids around.\n\n` +
+      `**Deliberate difference from the app:** \`src/pipeline/link.ts\` creates a taxonomy row it has\n` +
+      `never seen. This does not — it links what exists and returns the rest as \`unresolved\`, because\n` +
+      `creating and linking in one run can write the link before the row and leave a duplicate.`),
   ];
 
   const connections = connect([
@@ -458,13 +616,20 @@ const extractWorkflow = (() => {
     ['Build extraction request', 'Extract with Claude'],
     ['Extract with Claude', 'Validate extraction'],
     ['Validate extraction', 'Usable record?'],
-    ['Usable record?', 'Find existing project', 0],
+    ['Usable record?', 'Load technologies', 0],
     ['Usable record?', 'Build review row', 1],
-    ['Find existing project', 'Merge or create'],
-    ['Merge or create', 'Write project'],
-    ['Write project', 'Write evidence rows'],
-    ['Write evidence rows', 'Respond'],
+    ['Load technologies', 'Load capabilities'],
+    ['Load capabilities', 'Resolve taxonomy'],
+    ['Resolve taxonomy', 'Build project row'],
+    ['Build project row', 'Write project'],
+    // Two branches off the write. The evidence branch may legitimately be empty (a project with no
+    // receipts), and an empty branch stops there — which is why the response is its own branch and a
+    // Respond node rather than whichever node happened to finish last.
+    ['Write project', 'Fan out evidence'],
+    ['Write project', 'Respond'],
+    ['Fan out evidence', 'Write evidence rows'],
     ['Build review row', 'Write Needs Review'],
+    ['Write Needs Review', 'Rejected'],
   ]);
 
   return workflow('Proof of Work — extract project', nodes, connections);
@@ -730,23 +895,70 @@ const gaps = results.filter((r) => r.status !== 'proven').sort((a, b) => rank(a)
 
 const key = 'role-' + String(scored.company || scored.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + new Date().toISOString().slice(0, 10);
 
+// Everything the rest of the workflow needs, in one item. The next node narrows it to the Airtable
+// columns; nothing here is written directly, because autoMapInputData turns every top-level key into a
+// column and would try to make one out of 'results'.
+return [{ json: { key, results, gaps, coverage: scored.coverage } }];`;
+}
+
+/** Narrow the guard's output to exactly the Roles columns, and nothing else. */
+function roleRowNode(): string {
+  return `const scored = $('Retrieve and score').first().json;
+const guarded = $('Guard rationales').first().json;
+const now = new Date().toISOString();
+
 return [{
   json: {
-    key,
+    Key: guarded.key,
     Title: scored.title,
     Company: scored.company,
     'Posted Text': String(($('Role received').first().json.body || {}).text || '').slice(0, 90000),
-    Requirements: JSON.stringify(scored.requirements),
-    Results: JSON.stringify(results),
     Score: scored.coverage.score,
-    'Matched At': new Date().toISOString(),
+    'Requirement Count': scored.requirements.length,
+    'Matched At': now,
     Model: ${JSON.stringify(JD_MODELS[0])},
     Source: 'n8n',
-    'Ingested At': new Date().toISOString(),
-    coverage: scored.coverage,
-    gaps,
+    'Ingested At': now,
   },
 }];`;
+}
+
+/**
+ * One Results row per requirement, citations written as links.
+ *
+ * Links are given as the target's primary-field value (Technology.Name, Capability.Name, Project.Name,
+ * Evidence.Label, Role.Title) and the node runs with typecast, so Airtable resolves them to record ids.
+ * This is the payoff of the sixth table: the citations become traversable rows instead of slugs inside
+ * a string, and the Gaps view becomes a filter rather than an impossibility.
+ */
+function fanOutResultsNode(): string {
+  return `const scored = $('Retrieve and score').first().json;
+const rows = $('Load the record').first().json;
+const guarded = $('Guard rationales').first().json;
+const roleKey = guarded.key;
+const results = guarded.results || [];
+
+const nameOf = (table, key) => (rows[table].find((r) => r.key === key) || {}).name;
+const labelOf = (key) => (rows.evidence.find((e) => e.key === key) || {}).label;
+
+return results.map((r) => ({
+  json: {
+    Key: roleKey + '-' + r.requirementId,
+    Requirement: r.requirement.text,
+    Kind: r.requirement.kind,
+    Category: r.requirement.category,
+    Status: r.status,
+    Shortfall: r.shortfall || '',
+    'Match Score': r.score,
+    Rationale: r.rationale,
+    'Rationale Source': r.rationaleSource,
+    Role: [scored.title],
+    Technologies: r.matchedTechnologies.map((k) => nameOf('technologies', k)).filter(Boolean),
+    Capabilities: r.matchedCapabilities.map((k) => nameOf('capabilities', k)).filter(Boolean),
+    Projects: r.matchedProjects.map((k) => nameOf('projects', k)).filter(Boolean),
+    Evidence: r.evidence.map(labelOf).filter(Boolean),
+  },
+}));`;
 }
 
 const matchWorkflow = (() => {
@@ -817,12 +1029,20 @@ const matchWorkflow = (() => {
     })),
 
     code('Guard rationales', [1340, 320], guardNode()),
+    code('Build role row', [1560, 320], roleRowNode()),
+    upsert('Write the role', 'Roles', [1780, 320]),
 
-    airtable('Write the role', [1560, 320], {
-      operation: 'upsert',
-      table: { __rl: true, mode: 'name', value: 'Roles' },
-      columns: { mappingMode: 'autoMapInputData', matchingColumns: ['Key'], value: {} },
-    }),
+    code('Fan out results', [2000, 420], fanOutResultsNode()),
+    upsert('Write results', 'Results', [2220, 420]),
+
+    respond('Respond', [2000, 200],
+      `={{ {\n` +
+      `  ok: true,\n` +
+      `  role: $('Build role row').first().json.Title,\n` +
+      `  company: $('Build role row').first().json.Company,\n` +
+      `  coverage: $('Guard rationales').first().json.coverage,\n` +
+      `  gaps: $('Guard rationales').first().json.gaps\n` +
+      `} }}`),
 
     sticky('Scoring note', [860, 560], [500, 250],
       `### Scored in code, not by a model\n\n` +
@@ -852,7 +1072,13 @@ const matchWorkflow = (() => {
     ['Load the record', 'Retrieve and score'],
     ['Retrieve and score', 'Write rationales'],
     ['Write rationales', 'Guard rationales'],
-    ['Guard rationales', 'Write the role'],
+    ['Guard rationales', 'Build role row'],
+    ['Build role row', 'Write the role'],
+    // The Role has to exist before a Result can link to it, so the results branch hangs off the write.
+    // The response is its own branch for the same reason as in the extract workflow.
+    ['Write the role', 'Fan out results'],
+    ['Write the role', 'Respond'],
+    ['Fan out results', 'Write results'],
   ]);
 
   return workflow('Proof of Work — match role', nodes, connections);

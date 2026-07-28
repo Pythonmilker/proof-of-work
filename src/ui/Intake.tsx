@@ -1,24 +1,22 @@
 /**
- * Stage 1 and Stage 6b's before/after, on one screen.
+ * Stage 1, and the before/after that shows what the pipeline did to the input.
  *
- * Two things have to be legible in a single screenshot: that the input is genuinely messy, and that
- * every stage of the pipeline reported what it did. The stage list is not decoration — it is the
- * argument that nothing here fails quietly.
+ * Two corrections live in this file.
+ *
+ * **The failure branch no longer renders a success panel.** `IngestResult.ok` was computed and never
+ * read, so a rejected extraction printed "AFTER — STRUCTURED RECORD" with fields populated from the very
+ * output that had just failed validation, above a line counting fields that were never written. The one
+ * screen built to prove the pipeline does not fail quietly was a picture of it failing quietly.
+ *
+ * **The source-type radio group is gone.** Seven options, never passed to `ingest()`, never read by the
+ * pipeline, occupying the tallest slot in the sidebar of the landing screen. A control that does nothing
+ * teaches a false model of the product, and in a job-application demo it reads as unfinished.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import type { Snapshot } from '../store/types';
+import type { IntakeState } from './App';
 import { ingest, loadSample, type IngestResult, type SampleFile } from './api';
-
-const SOURCE_TYPES = [
-  { id: 'readme', label: 'README' },
-  { id: 'manifest', label: 'Package manifest' },
-  { id: 'test-output', label: 'Test output' },
-  { id: 'listing', label: 'Store listing' },
-  { id: 'infra', label: 'Infrastructure summary' },
-  { id: 'resume', label: 'Career document' },
-  { id: 'other', label: 'Something else' },
-] as const;
 
 const STAGE_ORDER = ['extract', 'validate', 'dedup', 'link', 'write'] as const;
 
@@ -39,6 +37,30 @@ function StageList({ result, running }: { result: IngestResult | null; running: 
         );
       })}
     </ul>
+  );
+}
+
+/** What a rejected extraction looks like. No fields, no counts, no structured record. */
+function Rejected({ result }: { result: IngestResult }) {
+  return (
+    <div className="card reject">
+      <p className="section-label">Rejected — parked in Needs Review</p>
+      <p style={{ marginTop: 0 }}>
+        Validation refused this source, so nothing was written to the record except a row marking it for
+        review. That row keeps the reason attached.
+      </p>
+      <ul className="problems">
+        {result.warnings.map((problem) => (
+          <li key={problem}>{problem}</li>
+        ))}
+      </ul>
+      <dl className="fields">
+        <dt>parked as</dt>
+        <dd>{result.project?.name ?? '—'}</dd>
+        <dt>source</dt>
+        <dd>{result.project?.source ?? '—'}</dd>
+      </dl>
+    </div>
   );
 }
 
@@ -81,8 +103,6 @@ function BeforeAfter({ blob, result }: { blob: string; result: IngestResult }) {
               <dd>{String(record?.['status'] ?? '—')}</dd>
               <dt>dates</dt>
               <dd>
-                {/* "not stated" rather than a bare dash. The source genuinely did not give a date, and
-                    saying so reads as a finding instead of a rendering failure. */}
                 {record?.['started'] ? String(record['started']) : 'not stated'}
                 {' to '}
                 {record?.['ended'] ? String(record['ended']) : 'ongoing'}
@@ -152,36 +172,39 @@ function BeforeAfter({ blob, result }: { blob: string; result: IngestResult }) {
 export function Intake({
   samples,
   snapshot,
+  state,
+  onState,
   onChanged,
 }: {
   samples: SampleFile[];
   snapshot: Snapshot | null;
+  state: IntakeState;
+  onState: (next: IntakeState) => void;
   onChanged: () => void;
 }) {
-  const [blob, setBlob] = useState('');
-  const [sourceName, setSourceName] = useState('pasted-input');
-  const [sourceType, setSourceType] = useState<string>('readme');
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<IngestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
-  const ingestedBlob = useRef('');
+  const latest = useRef(state);
+  latest.current = state;
 
+  const { blob, sourceName, result, ingestedBlob } = state;
+  const patch = (next: Partial<IntakeState>) => onState({ ...latest.current, ...next });
+
+  const parked = snapshot?.projects.filter((p) => p.reviewStatus === 'needs-review').length ?? 0;
   const counts = {
     projects: snapshot?.projects.filter((p) => p.reviewStatus === 'ok').length ?? 0,
     technologies: snapshot?.technologies.length ?? 0,
     capabilities: snapshot?.capabilities.length ?? 0,
     evidence: snapshot?.evidence.length ?? 0,
-    review: snapshot?.projects.filter((p) => p.reviewStatus === 'needs-review').length ?? 0,
     unverified: snapshot?.capabilities.filter((c) => c.evidence.length === 0).length ?? 0,
+    review: parked,
   };
 
   async function pickSample(name: string) {
     setError(null);
     try {
-      const body = await loadSample(name);
-      setBlob(body);
-      setSourceName(name);
+      patch({ blob: await loadSample(name), sourceName: name, result: null });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -191,10 +214,10 @@ export function Intake({
     if (!blob.trim() || running) return;
     setRunning(true);
     setError(null);
-    setResult(null);
-    ingestedBlob.current = blob;
+    patch({ result: null, ingestedBlob: blob });
     try {
-      setResult(await ingest(blob, sourceName));
+      const next = await ingest(blob, sourceName);
+      patch({ result: next, ingestedBlob: blob });
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -208,23 +231,23 @@ export function Intake({
     setOver(false);
     const file = event.dataTransfer.files[0];
     if (!file) return;
-    setBlob(await file.text());
-    setSourceName(file.name);
+    patch({ blob: await file.text(), sourceName: file.name, result: null });
   }
 
   useEffect(() => {
-    // Clearing the box invalidates the before/after — showing a record beside input it did not come
-    // from is exactly the kind of quiet lie this project exists to avoid.
-    if (!blob.trim()) setResult(null);
+    // Clearing the box invalidates the panel below it. Showing a record beside input it did not come
+    // from is exactly the quiet lie this project exists to avoid.
+    if (!blob.trim() && latest.current.result) patch({ result: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blob]);
 
   return (
     <>
-      <h1>Ingest evidence</h1>
+      <h1>Add evidence to the record</h1>
       <p className="lede">
-        Paste any artifact from a piece of work — a README, a package manifest, raw test output, a store
-        listing, an infrastructure summary. Extraction reads it, validation checks every field, and what
-        survives becomes a record with receipts attached.
+        Paste any artifact from a piece of work. Extraction reads it, validation checks every field, and
+        what survives becomes a record with receipts attached. What does not survive is parked for review
+        rather than dropped.
       </p>
 
       {error ? <div className="notice bad">{error}</div> : null}
@@ -233,7 +256,7 @@ export function Intake({
         <div className="card">
           <textarea
             value={blob}
-            onChange={(e) => setBlob(e.target.value)}
+            onChange={(e) => patch({ blob: e.target.value })}
             spellCheck={false}
             placeholder={'Paste a README, a package.json, raw test output, a store listing…'}
             aria-label="Raw evidence"
@@ -256,10 +279,7 @@ export function Intake({
             </button>
             <button
               className="btn ghost"
-              onClick={() => {
-                setBlob('');
-                setSourceName('pasted-input');
-              }}
+              onClick={() => patch({ blob: '', sourceName: 'pasted-input', result: null })}
               disabled={running || !blob}
             >
               Clear
@@ -274,6 +294,9 @@ export function Intake({
             <StageList result={result} running={running} />
           </div>
 
+          <p className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
+            The record, right now
+          </p>
           <div className="counts">
             <div>
               <b className="num">{counts.projects}</b>
@@ -291,11 +314,11 @@ export function Intake({
               <b className="num">{counts.evidence}</b>
               <span>evidence</span>
             </div>
-            <div className={counts.unverified > 0 ? 'flag' : undefined}>
+            <div className={counts.unverified > 0 ? 'flag' : undefined} title="Capabilities with nothing linked to them. These can never score as proven.">
               <b className="num">{counts.unverified}</b>
               <span>unverified</span>
             </div>
-            <div className={counts.review > 0 ? 'flag' : undefined}>
+            <div className={counts.review > 0 ? 'flag' : undefined} title="Sources that failed validation. Kept, with the reason attached.">
               <b className="num">{counts.review}</b>
               <span>needs review</span>
             </div>
@@ -304,24 +327,11 @@ export function Intake({
 
         <div>
           <div className="card">
-            <p className="section-label">Source type</p>
-            <div className="radio-list">
-              {SOURCE_TYPES.map((type) => (
-                <label key={type.id}>
-                  <input
-                    type="radio"
-                    name="source-type"
-                    checked={sourceType === type.id}
-                    onChange={() => setSourceType(type.id)}
-                  />
-                  {type.label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="card" style={{ marginTop: 16 }}>
-            <p className="section-label">Samples</p>
+            <p className="section-label">Try one</p>
+            <p className="hint">
+              These are real artifacts from real projects, committed in <code>raw/</code>. Click one and
+              press Ingest.
+            </p>
             {samples.length === 0 ? <span className="mono">none bundled</span> : null}
             {samples.map((sample) => (
               <button
@@ -335,13 +345,30 @@ export function Intake({
                 <span className="bytes">{(sample.bytes / 1024).toFixed(1)} kB</span>
               </button>
             ))}
+            <p className="hint" style={{ marginBottom: 0, marginTop: 10 }}>
+              <b>10-genestrata</b> is new to the record. <b>01-tendril</b> is already in it, so dedup
+              fires. <b>11-broken-fragment</b> fails validation on purpose.
+            </p>
           </div>
         </div>
       </div>
 
       {result ? (
         <div style={{ marginTop: 28 }}>
-          <BeforeAfter blob={ingestedBlob.current} result={result} />
+          {result.ok ? (
+            <BeforeAfter blob={ingestedBlob} result={result} />
+          ) : (
+            <div className="two-up">
+              <div>
+                <p className="section-label">Before — raw input</p>
+                <pre className="blob">{ingestedBlob}</pre>
+              </div>
+              <div>
+                <p className="section-label">After — nothing written</p>
+                <Rejected result={result} />
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
     </>

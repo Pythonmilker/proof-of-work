@@ -66,8 +66,8 @@ STAGE 2   EXTRACT WORKFLOW
                                                     │
                                           NEEDS REVIEW row  ◄──┘   (a real row, never a dropped record)
              ▼
-STAGE 3   AIRTABLE — five tables
-             Projects · Technologies · Capabilities · Evidence · Roles
+STAGE 3   AIRTABLE — six tables
+             Projects · Technologies · Capabilities · Evidence · Roles · Results
              views: Proven Capabilities · Needs Review
              one Interface dashboard
              ▲
@@ -99,7 +99,7 @@ it never sees the store, only the rows retrieval handed it.
 
 ---
 
-## 4. Data model — the five tables
+## 4. Data model — the six tables
 
 Types live in `src/store/types.ts`. Airtable field definitions in `airtable/schema.ts`. They are checked
 against each other by `tests/schema-parity.test.ts`.
@@ -356,7 +356,7 @@ projects it came nearest to.
 When the closest evidence is this project itself, it says so:
 
 > **Airtable** — no prior production experience. Closest evidence: this demo, which uses Airtable as its
-> application backend (5 tables, provisioned through the Meta API).
+> application backend (6 tables, provisioned through the Meta API).
 
 **The Gaps section is not removable.** It is the load-bearing claim.
 
@@ -548,7 +548,7 @@ evidence rows, 6 links`.
 │                                                                  │
 │  Airtable   No prior production experience. Closest evidence:    │
 │             this demo, which uses Airtable as its application    │
-│             backend (5 tables, provisioned via the Meta API).    │
+│             backend (6 tables, provisioned via the Meta API).    │
 │  …                                                               │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -600,7 +600,7 @@ embarrass this project.
 
 ## 11. Airtable
 
-Base created by `pnpm airtable:provision` — `POST /v0/meta/bases` with the five tables, then a second
+Base created by `pnpm airtable:provision` — `POST /v0/meta/bases` with the six tables, then a second
 pass adding `multipleRecordLinks` fields, because a link field needs `linkedTableId` and the target
 table does not exist until the first call returns. Then `pnpm airtable:push` seeds rows and resolves
 links.
@@ -740,6 +740,6 @@ clients/proof-of-work/
 | A wrong number ships | Every metric traced to `PORTFOLIO.md`; `seed-integrity.test.ts`; validator ceilings |
 | Silent LLM degradation | Typed failures, visible mode banner, `pnpm doctor`, both regression tests |
 | Committed workflow JSON rots | Generated from source; `pnpm n8n:build --check` in `pnpm verify` |
-| Scope creep past five tables | Written as a hard constraint here and in `CLAUDE.md` |
+| Serialising structure to dodge a table | The five-table rule produced JSON-in-long-text and was corrected to six. `tests/schema-parity.test.ts` now fails on a JSON blob rather than on a table count |
 | Screenshots depend on Joel's accounts | Everything code-side runs with zero credentials; SaaS steps reduced to one command plus a click-script |
 | Unverifiable claims about Arootah | Only site-verified vocabulary used. "18 functional disciplines" is confirmed; "700+ advisors" and "600+ coaches" were **not** found on the site and are not used anywhere |

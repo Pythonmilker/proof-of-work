@@ -68,7 +68,7 @@ VITE_PIPELINE_ENDPOINT=https://...  # moves the pipeline into n8n
 To create the Airtable base:
 
 ```bash
-pnpm airtable:provision   # 5 tables and 4 link fields, from one token
+pnpm airtable:provision   # 6 tables and 9 link fields, from one token
 pnpm airtable:push        # 6 projects, 44 technologies, 23 capabilities, 24 evidence rows
 ```
 
@@ -79,13 +79,15 @@ and `airtable/INTERFACE.md`.
 A credential that is set but rejected reports as rejected. `pnpm doctor` exits 1 and names the specific
 failure, and the header in the app reads `key rejected`.
 
-## The five tables
+## The six tables
 
 Projects hold the work. Technologies and Capabilities describe it. Evidence proves it. Roles hold every
-posting scored against the record.
+posting scored against the record, and Results hold one row per requirement of each posting.
 
-The count is a constraint. `tests/schema-parity.test.ts` fails if a sixth table appears. Anything that
-feels like a sixth table has so far turned out to be a field or a view.
+It was five. Results used to be escaped JSON inside a long-text field on Roles, to hold the count down.
+That disabled filtering, grouping, colouring and Interfaces on the one table holding the output, and
+Airtable renders tables as horizontal tabs, so six versus five looks identical. The constraint is
+legibility, not arithmetic. `tests/schema-parity.test.ts` pins the count and fails on a JSON blob.
 
 One rule in that schema does most of the work: a Capability with nothing in its Evidence link cannot score
 as proven, however cleanly a requirement matches it. Adding a capability row is easy. Making it count
@@ -104,11 +106,11 @@ pnpm n8n:build           # writes both files
 pnpm n8n:build --check   # fails if the committed JSON has drifted
 ```
 
-`extract-project.json` has 14 nodes. Webhook, build request, OpenRouter call, deterministic validation,
+`extract-project.json` has 19 nodes. Webhook, build request, OpenRouter call, deterministic validation,
 then a branch: valid records go to dedup and three Airtable writes, invalid ones become a row in Needs
 Review with the validator's problem list attached.
 
-`match-role.json` has 13 nodes. The one to read is `Retrieve and score`, a Code node that ranks Airtable
+`match-role.json` has 17 nodes. The one to read is `Retrieve and score`, a Code node that ranks Airtable
 rows and computes every verdict and the coverage number in arithmetic. Only after that is a model asked to
 describe each outcome in one sentence, from the rows retrieval returned. It receives no access to the base,
 so it cannot cite a project that did not match. `tests/workflow.test.ts` asserts the scoring node contains
@@ -156,7 +158,7 @@ when a caller supplies an override that is not already in the chain.
 ## Tests
 
 ```bash
-pnpm test        # 170 passing, 3 skipped, 12 files
+pnpm test        # 180 passing, 3 skipped, 12 files
 pnpm typecheck
 pnpm verify      # typecheck, tests, and the workflow drift check
 ```

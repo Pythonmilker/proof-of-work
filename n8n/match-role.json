@@ -1,4 +1,5 @@
 {
+  "id": "GMr5ECRh0yoDbcsj",
   "name": "Proof of Work — match role",
   "nodes": [
     {
@@ -29,7 +30,7 @@
         "path": "proof-of-work/match",
         "options": {},
         "httpMethod": "POST",
-        "responseMode": "lastNode"
+        "responseMode": "responseNode"
       }
     },
     {
@@ -76,7 +77,9 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "search",
         "table": {
           "__rl": true,
@@ -107,7 +110,9 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "search",
         "table": {
           "__rl": true,
@@ -138,7 +143,9 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "search",
         "table": {
           "__rl": true,
@@ -169,7 +176,9 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "search",
         "table": {
           "__rl": true,
@@ -250,7 +259,20 @@
         320
       ],
       "parameters": {
-        "jsCode": "// THE FABRICATION GUARD.\n//\n// Every number in a generated rationale must appear in the records that rationale was written from. A\n// sentence containing an unsourced figure is discarded whole and replaced by the deterministic template\n// — not repaired, because a half-trusted sentence is worse than a plain one.\n//\n// Numbers are the tripwire for two reasons: they are where a small model reaches for a total or a\n// rounding, and they are the only claim in a fit report a reader will actually go and check.\nconst scored = $('Retrieve and score').first().json;\nconst rows = $('Load the record').first().json;\nconst generated = $input.all().map((i) => {\n  try { return JSON.parse(i.json.choices[0].message.content).rationale; } catch (e) { return null; }\n});\n\nconst numbersIn = (s) => (String(s || '').match(/(?<![a-z0-9])\\d[\\d,]*(?![a-z])/gi) || []).map((n) => n.replace(/,$/, ''));\n\nconst results = scored.results.map((r, i) => {\n  const receipts = r.evidence.map((id) => rows.evidence.find((e) => e.key === id)).filter(Boolean);\n  const projects = r.matchedProjects.map((id) => rows.projects.find((p) => p.key === id)).filter(Boolean);\n  const corpus = [\n    r.requirement.text,\n    r.shortfall || '',\n    projects.map((p) => p.name + ' ' + (p.status || '')).join(' '),\n    receipts.map((e) => e.label + ' ' + e.value).join(' '),\n  ].join('\\n');\n\n  const where = projects.length\n    ? (projects.length === 1 ? projects[0].name : projects.slice(0, -1).map((p) => p.name).join(', ') + ' and ' + projects[projects.length - 1].name)\n    : 'the record';\n  const subject = (rows.technologies.find((t) => t.key === r.matchedTechnologies[0]) || {}).name\n    || (rows.capabilities.find((c) => c.key === r.matchedCapabilities[0]) || {}).name\n    || 'This';\n  const receiptText = receipts.length\n    ? receipts.length + ' linked receipt' + (receipts.length === 1 ? '' : 's')\n    : 'nothing verifiable linked';\n\n  const template = r.status === 'gap'\n    ? 'Nothing in the record matches this requirement.'\n    : r.status === 'proven'\n      ? subject + ' — shipped in ' + where + ', with ' + receiptText + '.'\n      : subject + ' appears in ' + where + ' with ' + receiptText + ', but ' + (r.shortfall || 'coverage is partial') + '.';\n\n  const written = generated[i];\n  const allowed = numbersIn(corpus);\n  const unsourced = written\n    ? numbersIn(written).some((n) => allowed.indexOf(n) === -1 && Number(n.replace(/,/g, '')) > 12)\n    : true;\n\n  const usable = written && written.length <= 400 && !unsourced;\n  return { ...r, rationale: usable ? written : template, rationaleSource: usable ? 'model' : 'template' };\n});\n\n// Everything that is not proven, required first. The Gaps section is the load-bearing claim: a scoring\n// system that only reports its hits is a flattery generator, and a reader can tell.\nconst rank = (r) => (r.requirement.kind === 'required' ? 0 : 2) + (r.status === 'gap' ? 0 : 1);\nconst gaps = results.filter((r) => r.status !== 'proven').sort((a, b) => rank(a) - rank(b)).map((r) => {\n  const closest = rows.evidence.find((e) => e.key === r.evidence[0]) || null;\n  return {\n    requirement: r.requirement,\n    status: r.status,\n    note: (r.shortfall || 'no match in the record').replace(/^./, (c) => c.toUpperCase()) + '.',\n    closestEvidence: closest ? { label: closest.label, value: closest.value, url: closest.url } : null,\n  };\n});\n\nconst key = 'role-' + String(scored.company || scored.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + new Date().toISOString().slice(0, 10);\n\nreturn [{\n  json: {\n    key,\n    Title: scored.title,\n    Company: scored.company,\n    'Posted Text': String(($('Role received').first().json.body || {}).text || '').slice(0, 90000),\n    Requirements: JSON.stringify(scored.requirements),\n    Results: JSON.stringify(results),\n    Score: scored.coverage.score,\n    'Matched At': new Date().toISOString(),\n    Model: \"openai/gpt-4o-mini\",\n    Source: 'n8n',\n    'Ingested At': new Date().toISOString(),\n    coverage: scored.coverage,\n    gaps,\n  },\n}];"
+        "jsCode": "// THE FABRICATION GUARD.\n//\n// Every number in a generated rationale must appear in the records that rationale was written from. A\n// sentence containing an unsourced figure is discarded whole and replaced by the deterministic template\n// — not repaired, because a half-trusted sentence is worse than a plain one.\n//\n// Numbers are the tripwire for two reasons: they are where a small model reaches for a total or a\n// rounding, and they are the only claim in a fit report a reader will actually go and check.\nconst scored = $('Retrieve and score').first().json;\nconst rows = $('Load the record').first().json;\nconst generated = $input.all().map((i) => {\n  try { return JSON.parse(i.json.choices[0].message.content).rationale; } catch (e) { return null; }\n});\n\nconst numbersIn = (s) => (String(s || '').match(/(?<![a-z0-9])\\d[\\d,]*(?![a-z])/gi) || []).map((n) => n.replace(/,$/, ''));\n\nconst results = scored.results.map((r, i) => {\n  const receipts = r.evidence.map((id) => rows.evidence.find((e) => e.key === id)).filter(Boolean);\n  const projects = r.matchedProjects.map((id) => rows.projects.find((p) => p.key === id)).filter(Boolean);\n  const corpus = [\n    r.requirement.text,\n    r.shortfall || '',\n    projects.map((p) => p.name + ' ' + (p.status || '')).join(' '),\n    receipts.map((e) => e.label + ' ' + e.value).join(' '),\n  ].join('\\n');\n\n  const where = projects.length\n    ? (projects.length === 1 ? projects[0].name : projects.slice(0, -1).map((p) => p.name).join(', ') + ' and ' + projects[projects.length - 1].name)\n    : 'the record';\n  const subject = (rows.technologies.find((t) => t.key === r.matchedTechnologies[0]) || {}).name\n    || (rows.capabilities.find((c) => c.key === r.matchedCapabilities[0]) || {}).name\n    || 'This';\n  const receiptText = receipts.length\n    ? receipts.length + ' linked receipt' + (receipts.length === 1 ? '' : 's')\n    : 'nothing verifiable linked';\n\n  const template = r.status === 'gap'\n    ? 'Nothing in the record matches this requirement.'\n    : r.status === 'proven'\n      ? subject + ' — shipped in ' + where + ', with ' + receiptText + '.'\n      : subject + ' appears in ' + where + ' with ' + receiptText + ', but ' + (r.shortfall || 'coverage is partial') + '.';\n\n  const written = generated[i];\n  const allowed = numbersIn(corpus);\n  const unsourced = written\n    ? numbersIn(written).some((n) => allowed.indexOf(n) === -1 && Number(n.replace(/,/g, '')) > 12)\n    : true;\n\n  const usable = written && written.length <= 400 && !unsourced;\n  return { ...r, rationale: usable ? written : template, rationaleSource: usable ? 'model' : 'template' };\n});\n\n// Everything that is not proven, required first. The Gaps section is the load-bearing claim: a scoring\n// system that only reports its hits is a flattery generator, and a reader can tell.\nconst rank = (r) => (r.requirement.kind === 'required' ? 0 : 2) + (r.status === 'gap' ? 0 : 1);\nconst gaps = results.filter((r) => r.status !== 'proven').sort((a, b) => rank(a) - rank(b)).map((r) => {\n  const closest = rows.evidence.find((e) => e.key === r.evidence[0]) || null;\n  return {\n    requirement: r.requirement,\n    status: r.status,\n    note: (r.shortfall || 'no match in the record').replace(/^./, (c) => c.toUpperCase()) + '.',\n    closestEvidence: closest ? { label: closest.label, value: closest.value, url: closest.url } : null,\n  };\n});\n\nconst key = 'role-' + String(scored.company || scored.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + new Date().toISOString().slice(0, 10);\n\n// Everything the rest of the workflow needs, in one item. The next node narrows it to the Airtable\n// columns; nothing here is written directly, because autoMapInputData turns every top-level key into a\n// column and would try to make one out of 'results'.\nreturn [{ json: { key, results, gaps, coverage: scored.coverage } }];"
+      }
+    },
+    {
+      "id": "8baefead-0000-4000-8000-8baefead0000",
+      "name": "Build role row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const scored = $('Retrieve and score').first().json;\nconst guarded = $('Guard rationales').first().json;\nconst now = new Date().toISOString();\n\nreturn [{\n  json: {\n    Key: guarded.key,\n    Title: scored.title,\n    Company: scored.company,\n    'Posted Text': String(($('Role received').first().json.body || {}).text || '').slice(0, 90000),\n    Score: scored.coverage.score,\n    'Requirement Count': scored.requirements.length,\n    'Matched At': now,\n    Model: \"openai/gpt-4o-mini\",\n    Source: 'n8n',\n    'Ingested At': now,\n  },\n}];"
       }
     },
     {
@@ -259,7 +281,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        1560,
+        1780,
         320
       ],
       "parameters": {
@@ -268,7 +290,9 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "upsert",
         "table": {
           "__rl": true,
@@ -287,6 +311,75 @@
         "airtableTokenApi": {
           "id": "airtable-pat",
           "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "id": "8c73499c-0000-4000-8000-8c73499c0000",
+      "name": "Fan out results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        420
+      ],
+      "parameters": {
+        "jsCode": "const scored = $('Retrieve and score').first().json;\nconst rows = $('Load the record').first().json;\nconst guarded = $('Guard rationales').first().json;\nconst roleKey = guarded.key;\nconst results = guarded.results || [];\n\nconst nameOf = (table, key) => (rows[table].find((r) => r.key === key) || {}).name;\nconst labelOf = (key) => (rows.evidence.find((e) => e.key === key) || {}).label;\n\nreturn results.map((r) => ({\n  json: {\n    Key: roleKey + '-' + r.requirementId,\n    Requirement: r.requirement.text,\n    Kind: r.requirement.kind,\n    Category: r.requirement.category,\n    Status: r.status,\n    Shortfall: r.shortfall || '',\n    'Match Score': r.score,\n    Rationale: r.rationale,\n    'Rationale Source': r.rationaleSource,\n    Role: [scored.title],\n    Technologies: r.matchedTechnologies.map((k) => nameOf('technologies', k)).filter(Boolean),\n    Capabilities: r.matchedCapabilities.map((k) => nameOf('capabilities', k)).filter(Boolean),\n    Projects: r.matchedProjects.map((k) => nameOf('projects', k)).filter(Boolean),\n    Evidence: r.evidence.map(labelOf).filter(Boolean),\n  },\n}));"
+      }
+    },
+    {
+      "id": "116bea1a-0000-4000-8000-116bea1a0000",
+      "name": "Write results",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2220,
+        420
+      ],
+      "parameters": {
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.AIRTABLE_BASE_ID }}"
+        },
+        "options": {
+          "typecast": true
+        },
+        "operation": "upsert",
+        "table": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Results"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [
+            "Key"
+          ],
+          "value": {}
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-pat",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "id": "3a35a9c6-0000-4000-8000-3a35a9c60000",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2000,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  ok: true,\n  role: $('Build role row').first().json.Title,\n  company: $('Build role row').first().json.Company,\n  coverage: $('Guard rationales').first().json.coverage,\n  gaps: $('Guard rationales').first().json.gaps\n} }}",
+        "options": {
+          "responseCode": 200
         }
       }
     },
@@ -425,7 +518,45 @@
       "main": [
         [
           {
+            "node": "Build role row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build role row": {
+      "main": [
+        [
+          {
             "node": "Write the role",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write the role": {
+      "main": [
+        [
+          {
+            "node": "Fan out results",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fan out results": {
+      "main": [
+        [
+          {
+            "node": "Write results",
             "type": "main",
             "index": 0
           }
@@ -434,6 +565,10 @@
     }
   },
   "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
   "meta": {
     "templateCredsSetupCompleted": false
   }

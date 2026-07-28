@@ -1,4 +1,4 @@
-# The two views
+# The three views
 
 Airtable has no API for creating views, so these are the one part of the base that has to be clicked.
 Both take under a minute.
@@ -32,6 +32,21 @@ What it is for: extraction failures, kept rather than dropped. Run the pipeline 
 A pipeline that discards what it cannot parse produces output that looks complete and is not, and the
 omission is invisible — the report simply never mentions the thing. This view is that decision made
 visible.
+
+## 3. Gaps — the one the sixth table bought
+
+Table: **Results**
+
+1. **Grid view → +** → name it `Gaps`
+2. **Filter** → `Where` `Status` `is not` `proven`
+3. **Group** → by `Kind`, so required items sit above preferred ones
+4. **Colour** → by `Status`: `partial` amber, `gap` red
+5. Show `Requirement`, `Status`, `Shortfall`, `Projects`, `Evidence`
+
+This view could not exist at all until Results became rows. While each report was an escaped JSON string
+in a long-text field on Roles, no filter could reach a status, no group could reach a kind, and no colour
+rule could reach anything. That is the clearest single argument for the sixth table, and it is worth
+saying out loud when someone asks why the count went from five to six.
 
 ## Optional, and worth the thirty seconds
 

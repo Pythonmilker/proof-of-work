@@ -144,7 +144,13 @@ export type CoverageStatus = 'proven' | 'partial' | 'gap';
 /** One row of the fit report. Everything here except `rationale` is computed in code. */
 export interface RequirementResult {
   requirementId: string;
+  /** Denormalised so a Results row is readable on its own in Airtable, without following the link. */
+  requirementText: string;
+  kind: RequirementKind;
+  category: RequirementCategory;
   status: CoverageStatus;
+  /** Why this is not `proven`, in plain words. Null when it is. Drives the Gaps view. */
+  shortfall: string | null;
   /** 0..1, from src/pipeline/match.ts. Deterministic given the same store and the same requirement. */
   score: number;
   matchedTechnologies: string[];

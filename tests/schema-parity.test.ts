@@ -67,7 +67,9 @@ const MAPPING: Record<string, Record<string, string | null>> = {
     title: 'Title',
     company: 'Company',
     postedText: 'Posted Text',
-    requirements: 'Requirements',
+    // Both rebuild from the Results rows. `requirements` has no field of its own because a Results row
+    // carries its own text, kind and category, so there is one source of truth rather than two.
+    requirements: null,
     results: 'Results',
     score: 'Score',
     matchedAt: 'Matched At',
@@ -75,6 +77,32 @@ const MAPPING: Record<string, Record<string, string | null>> = {
     source: 'Source',
     ingestedAt: 'Ingested At',
   },
+  Results: {
+    requirementId: 'Key',
+    requirementText: 'Requirement',
+    kind: 'Kind',
+    category: 'Category',
+    status: 'Status',
+    shortfall: 'Shortfall',
+    score: 'Match Score',
+    matchedTechnologies: 'Technologies',
+    matchedCapabilities: 'Capabilities',
+    matchedProjects: 'Projects',
+    evidence: 'Evidence',
+    rationale: 'Rationale',
+    rationaleSource: 'Rationale Source',
+  },
+};
+
+/**
+ * Fields the base holds that no TypeScript property maps to, and why each one is legitimate.
+ *
+ * Kept explicit rather than hand-waved: an unexplained extra column in the base is usually a mapping
+ * that has quietly gone missing, and this is the list that says which ones are on purpose.
+ */
+const DERIVED: Record<string, string> = {
+  'Roles.Requirement Count': 'Denormalised count, for reading the grid without opening the linked rows.',
+  'Results.Role': 'The parent link. Implicit in the TypeScript, where results live inside their Role.',
 };
 
 /**
@@ -88,7 +116,15 @@ const MAPPING: Record<string, Record<string, string | null>> = {
  * Listed here rather than quietly excluded, because an asymmetry someone will notice in the base is
  * better documented than discovered.
  */
-const REVERSE_ONLY = new Set(['Evidence.Capabilities']);
+const REVERSE_ONLY = new Set([
+  'Evidence.Capabilities',
+  // Results links out to four tables, so each of them gains a Results field. Nothing traverses back
+  // that way: the report is always read from the Role down.
+  'Technologies.Results',
+  'Capabilities.Results',
+  'Projects.Results',
+  'Evidence.Results',
+]);
 
 /**
  * Field names Airtable ends up with, including the reverse sides it creates for free.
@@ -104,17 +140,31 @@ function airtableFieldsFor(table: string): Set<string> {
 }
 
 describe('every table in the type layer exists in the base', () => {
-  it('has exactly five tables, and the count is the constraint', () => {
-    // Not a coincidence and not a limit that happened to be enough. Every extra table costs a column in
-    // the Airtable screenshot and buys nothing; anything that feels like a sixth is a field or a view.
-    expect(TABLES).toHaveLength(5);
+  it('has six tables, small enough to read in one screenshot', () => {
+    // It was five, and the fifth-table rule was costing more than it saved: results lived as escaped
+    // JSON in a long-text field to avoid a sixth table, which disabled filtering, grouping, colouring
+    // and Interfaces on the one table holding the output. Airtable renders tables as horizontal tabs,
+    // so six versus five is visually identical. The real constraint is legibility, not arithmetic.
+    expect(TABLES).toHaveLength(6);
     expect(TABLES.map((t) => t.name).sort()).toEqual([
       'Capabilities',
       'Evidence',
       'Projects',
+      'Results',
       'Roles',
       'Technologies',
     ]);
+  });
+
+  it('stores no JSON blob in any long-text field', () => {
+    // The anti-pattern this schema was rebuilt to remove. A field whose description or name suggests it
+    // holds serialised structure is a linked table that has not been written yet.
+    for (const table of TABLES) {
+      for (const field of table.fields) {
+        expect(field.name, `${table.name}.${field.name}`).not.toMatch(/json/i);
+        expect(field.description ?? '', `${table.name}.${field.name}`).not.toMatch(/JSON/);
+      }
+    }
   });
 
   it.each(Object.keys(MAPPING))('%s: every mapped property has a field', (table) => {
@@ -129,7 +179,15 @@ describe('every table in the type layer exists in the base', () => {
     const mapped = new Set(Object.values(MAPPING[table] ?? {}).filter(Boolean));
     for (const field of airtableFieldsFor(table)) {
       if (REVERSE_ONLY.has(`${table}.${field}`)) continue;
+      if (DERIVED[`${table}.${field}`]) continue;
       expect(mapped, `${table}.${field} has no property mapped to it`).toContain(field);
+    }
+  });
+
+  it('only tolerates a derived field that the base really has', () => {
+    for (const entry of Object.keys(DERIVED)) {
+      const [table, field] = entry.split('.');
+      expect(airtableFieldsFor(table as string), entry).toContain(field);
     }
   });
 
@@ -202,8 +260,16 @@ describe('link fields', () => {
 });
 
 describe('views', () => {
-  it('defines the recruiter view and the operator view', () => {
-    expect(VIEWS.map((v) => v.name)).toEqual(['Proven Capabilities', 'Needs Review']);
+  it('defines the recruiter view, the operator view and the gaps view', () => {
+    expect(VIEWS.map((v) => v.name)).toEqual(['Proven Capabilities', 'Needs Review', 'Gaps']);
+  });
+
+  it('puts Gaps on Results, which is only possible now results are rows', () => {
+    // The clearest single argument for the sixth table: while results were a JSON string, no filter
+    // could reach a status, so this view could not exist at all.
+    const gaps = VIEWS.find((v) => v.name === 'Gaps');
+    expect(gaps?.table).toBe('Results');
+    expect(gaps?.filter).toContain('Status');
   });
 
   it('filters Proven Capabilities on evidence as well as tier', () => {

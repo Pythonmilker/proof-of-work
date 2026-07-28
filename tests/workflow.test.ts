@@ -173,6 +173,83 @@ describe('OpenRouter calls inside the workflows', () => {
   });
 });
 
+/**
+ * Data flow into the Airtable writes.
+ *
+ * This is the bug class that made it all the way to a committed deliverable: every node type, version and
+ * parameter shape was verified against real published workflows, the JSON imported cleanly, and the write
+ * still did nothing. `autoMapInputData` maps TOP-LEVEL json keys onto Airtable field names, and the
+ * upstream Code node was returning `{ valid, sourceName, project: {...}, ... }` with every real field one
+ * level down. Nothing matched, nothing was written, and nothing errored.
+ *
+ * Structural validity is not correctness. These assert the shape of the data, not the shape of the nodes.
+ */
+describe('Airtable writes receive the shape they auto-map', () => {
+  const INTERNAL_KEYS = ['valid', 'sourceName', 'warnings', 'project', 'duplicateOf', 'action', 'stack'];
+
+  function upstreamOf(wf: Workflow, target: string): Node | undefined {
+    const from = Object.entries(wf.connections).find(([, conn]) =>
+      conn.main.some((output) => output.some((t) => t.node === target)),
+    )?.[0];
+    return wf.nodes.find((n) => n.name === from);
+  }
+
+  it.each([
+    ['extract-project.json', 'Write project'],
+    ['extract-project.json', 'Write evidence rows'],
+    ['extract-project.json', 'Write Needs Review'],
+  ])('%s :: %s is fed a flat record', (file, target) => {
+    const wf = file === 'extract-project.json' ? extract : matchRole;
+    const node = wf.nodes.find((n) => n.name === target);
+    expect(String((node?.parameters['columns'] as Record<string, unknown>)?.['mappingMode'])).toBe(
+      'autoMapInputData',
+    );
+
+    const upstream = upstreamOf(wf, target);
+    expect(upstream, `nothing feeds ${target}`).toBeDefined();
+    if (upstream?.type !== 'n8n-nodes-base.code') return; // an Airtable-to-Airtable hop needs no check
+
+    const returned = String(upstream.parameters['jsCode']).split('return').slice(-1)[0] ?? '';
+
+    // The row's own Key must be emitted, because matchingColumns is ["Key"].
+    expect(returned, `${upstream.name} does not emit a top-level Key`).toMatch(/\bKey:/);
+
+    // And none of the pipeline's internal bookkeeping may sit at the top level, where auto-mapping
+    // would try to turn it into an Airtable column.
+    for (const internal of INTERNAL_KEYS) {
+      expect(returned, `${upstream.name} leaks internal key "${internal}" into the row`).not.toMatch(
+        new RegExp(`\\n\\s*${internal}:`),
+      );
+    }
+  });
+
+  it('fans evidence out to one item per record', () => {
+    // n8n writes one Airtable record per ITEM. A single item carrying an `evidence` array wrote exactly
+    // one row however many receipts the extraction found.
+    const fan = extract.nodes.find((n) => n.name === 'Fan out evidence');
+    expect(fan, 'there is no fan-out node before the evidence write').toBeDefined();
+
+    const source = String(fan?.parameters['jsCode']);
+    expect(source).toMatch(/\.map\(/);
+    expect(source).toMatch(/evidence \|\| \[\]/);
+
+    expect(extract.connections['Fan out evidence']?.main[0]?.[0]?.node).toBe('Write evidence rows');
+  });
+
+  it('references only nodes that exist in $() lookups', () => {
+    // $('Some Node') against a renamed or missing node fails at runtime, long after import.
+    for (const wf of [extract, matchRole]) {
+      const names = new Set(wf.nodes.map((n) => n.name));
+      for (const node of wf.nodes.filter((n) => n.type === 'n8n-nodes-base.code')) {
+        const source = String(node.parameters['jsCode']);
+        for (const [, referenced] of source.matchAll(/\$\('([^']+)'\)/g)) {
+          expect(names, `${node.name} references a missing node "${referenced}"`).toContain(referenced);
+        }
+      }
+    }
+  });
+});
+
 describe('the extract workflow', () => {
   it('branches on validity and routes failures to Needs Review', () => {
     // The error branch is the design decision worth defending: nothing is dropped, so the output cannot

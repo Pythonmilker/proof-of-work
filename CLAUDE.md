@@ -10,8 +10,9 @@ Global standards load from `~/.claude/CLAUDE.md`.
 
 ## Non-negotiables
 
-- **Five tables. Not six.** Every extra table costs a column in the Airtable screenshot and buys nothing.
-  Anything that feels like a sixth table is a field or a view. `tests/schema-parity.test.ts` enforces it.
+- **Six tables, and no JSON blobs.** The rule is legibility, not a count: serialising structure into a
+  long-text field to avoid a table disables everything Airtable is for. `tests/schema-parity.test.ts`
+  pins the count and fails on a field whose name or description mentions JSON.
 - **The Gaps section stays.** It is the load-bearing claim. A scoring system that only reports its hits is
   a flattery generator and a reader can tell. `tests/vocabulary.test.ts` enforces it.
 - **The evidence gate stays.** A capability with no linked evidence can never score proven.
@@ -27,7 +28,7 @@ Global standards load from `~/.claude/CLAUDE.md`.
 - React 19 + TypeScript + Vite. Hand-written CSS, no framework. Two runtime dependencies.
 - Install: `pnpm install`
 - Run: `pnpm dev` (port 5273)
-- Test: `pnpm test` (170 passing, 3 skipped behind `LIVE_OPENROUTER=1`)
+- Test: `pnpm test` (180 passing, 3 skipped behind `LIVE_OPENROUTER=1`)
 - Typecheck: `pnpm typecheck`
 - Everything: `pnpm verify` (typecheck, tests, n8n drift check)
 - Credentials: `pnpm doctor`
@@ -39,7 +40,7 @@ Global standards load from `~/.claude/CLAUDE.md`.
 - `raw/` — 11 committed artifacts. Stage 0, deliberately messy.
 - `src/openrouter/` — protocol (model tiers, both traps), schemas, chat client, embeddings.
 - `src/pipeline/` — text, extract, validate, link, match, score, rationale, index (orchestrator).
-- `src/store/` — types (the five tables), seed, local adapter, Airtable adapter, mode detection.
+- `src/store/` — types (the six tables), seed, local adapter, Airtable adapter, mode detection.
 - `src/server/handlers.ts` — the `/api` surface, mounted by a Vite plugin in `vite.config.ts`.
 - `src/ui/` — App, Intake, FitReport, Records, ModeBanner, sample-posting.
 - `n8n/build.ts` — generates both workflows. Do not hand-edit the JSON.

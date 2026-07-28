@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import type { CoverageStatus, Requirement, Snapshot } from '../store/types';
+import type { MatchState } from './App';
 import { match, type MatchReport } from './api';
 import { SAMPLE_POSTING, SAMPLE_POSTING_LABEL } from './sample-posting';
 
@@ -103,18 +104,25 @@ function Row({
   requirement,
   report,
   snapshot,
+  defaultOpen,
 }: {
   requirement: Requirement;
   report: MatchReport;
   snapshot: Snapshot;
+  defaultOpen: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  // The first row opens by default. Citations are what this project is selling, and they were behind an
+  // invisible click target on a button with no caret and no hover state.
+  const [open, setOpen] = useState(defaultOpen);
   const result = report.role.results.find((r) => r.requirementId === requirement.id);
   const status = result?.status ?? 'gap';
 
   return (
     <div className={`req ${status}`}>
       <button className="req-head" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className={`caret${open ? ' open' : ''}`} aria-hidden="true">
+          ▸
+        </span>
         <span className="marker">{MARKER[status]}</span>
         <span className="title">{requirement.text}</span>
         <span className="kind">{requirement.kind}</span>
@@ -129,18 +137,27 @@ function Row({
   );
 }
 
-export function FitReport({ snapshot, onChanged }: { snapshot: Snapshot | null; onChanged: () => void }) {
-  const [text, setText] = useState(SAMPLE_POSTING);
+export function FitReport({
+  snapshot,
+  state,
+  onState,
+  onChanged,
+}: {
+  snapshot: Snapshot | null;
+  state: MatchState;
+  onState: (next: MatchState) => void;
+  onChanged: () => void;
+}) {
   const [running, setRunning] = useState(false);
-  const [report, setReport] = useState<MatchReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { text, report } = state;
 
   async function run() {
     if (!text.trim() || running) return;
     setRunning(true);
     setError(null);
     try {
-      setReport(await match(text));
+      onState({ text, report: await match(text) });
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -164,7 +181,7 @@ export function FitReport({ snapshot, onChanged }: { snapshot: Snapshot | null; 
         <div className="card">
           <textarea
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => onState({ text: e.target.value, report: null })}
             spellCheck={false}
             aria-label="Job description"
             style={{ minHeight: 340 }}
@@ -173,10 +190,10 @@ export function FitReport({ snapshot, onChanged }: { snapshot: Snapshot | null; 
             <button className="btn" onClick={run} disabled={!text.trim() || running}>
               {running ? 'Scoring…' : 'Score this role'}
             </button>
-            <button className="btn ghost" onClick={() => setText(SAMPLE_POSTING)} disabled={running}>
+            <button className="btn ghost" onClick={() => onState({ text: SAMPLE_POSTING, report: null })} disabled={running}>
               Reset to sample
             </button>
-            <button className="btn ghost" onClick={() => setText('')} disabled={running}>
+            <button className="btn ghost" onClick={() => onState({ text: '', report: null })} disabled={running}>
               Clear
             </button>
           </div>
@@ -226,6 +243,19 @@ export function FitReport({ snapshot, onChanged }: { snapshot: Snapshot | null; 
           </div>
         </div>
 
+        <p className="definitions">
+          <b>Weighted</b> means a required item counts double a preferred one, and a partial counts half.{' '}
+          <b className="proven-word">Proven</b> is matched with checkable evidence linked.{' '}
+          <b className="partial-word">Partial</b> is matched, but the evidence is missing or the
+          capability is recorded as a stretch rather than as shipped work.{' '}
+          <b className="gap-word">Gap</b> is nothing in the record matches.
+        </p>
+
+        <p className="determinism">
+          Every verdict below is arithmetic. A model parses the posting and writes one sentence per
+          requirement; it never decides a status.
+        </p>
+
         {report.notes.length > 0 ? (
           <div className="notice" style={{ marginTop: 18, marginBottom: 0 }}>
             {report.notes.join(' · ')}
@@ -236,8 +266,14 @@ export function FitReport({ snapshot, onChanged }: { snapshot: Snapshot | null; 
       <div className="card" style={{ marginTop: 18 }}>
         <h2>Requirements</h2>
         {snapshot
-          ? role.requirements.map((requirement) => (
-              <Row key={requirement.id} requirement={requirement} report={report} snapshot={snapshot} />
+          ? role.requirements.map((requirement, i) => (
+              <Row
+                key={requirement.id}
+                requirement={requirement}
+                report={report}
+                snapshot={snapshot}
+                defaultOpen={i === 0}
+              />
             ))
           : null}
       </div>
@@ -285,7 +321,7 @@ export function FitReport({ snapshot, onChanged }: { snapshot: Snapshot | null; 
       </section>
 
       <div className="actions" style={{ marginTop: 20 }}>
-        <button className="btn ghost" onClick={() => setReport(null)}>
+        <button className="btn ghost" onClick={() => onState({ text, report: null })}>
           Score another role
         </button>
         <span className="mono" style={{ color: 'var(--text-faint)' }}>

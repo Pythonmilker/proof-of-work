@@ -1,4 +1,5 @@
 {
+  "id": "90gBtQgDtUDNaCZx",
   "name": "Proof of Work — extract project",
   "nodes": [
     {
@@ -29,7 +30,7 @@
         "path": "proof-of-work/extract",
         "options": {},
         "httpMethod": "POST",
-        "responseMode": "lastNode"
+        "responseMode": "responseNode"
       }
     },
     {
@@ -122,13 +123,13 @@
       }
     },
     {
-      "id": "564f5fb6-0000-4000-8000-564f5fb60000",
-      "name": "Find existing project",
+      "id": "3857e6ad-0000-4000-8000-3857e6ad0000",
+      "name": "Load technologies",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
         1080,
-        140
+        60
       ],
       "parameters": {
         "base": {
@@ -136,16 +137,16 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "search",
         "table": {
           "__rl": true,
           "mode": "name",
-          "value": "Projects"
+          "value": "Technologies"
         },
-        "returnAll": false,
-        "limit": 100,
-        "filterByFormula": "={{ '{Key} = \"' + $json.project.key + '\"' }}"
+        "returnAll": true
       },
       "credentials": {
         "airtableTokenApi": {
@@ -155,16 +156,62 @@
       }
     },
     {
-      "id": "b352e678-0000-4000-8000-b352e6780000",
-      "name": "Merge or create",
+      "id": "a27574c9-0000-4000-8000-a27574c90000",
+      "name": "Load capabilities",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1300,
+        60
+      ],
+      "parameters": {
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.AIRTABLE_BASE_ID }}"
+        },
+        "options": {
+          "typecast": true
+        },
+        "operation": "search",
+        "table": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Capabilities"
+        },
+        "returnAll": true
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-pat",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "id": "9c0273a2-0000-4000-8000-9c0273a20000",
+      "name": "Resolve taxonomy",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1300,
-        140
+        1520,
+        60
       ],
       "parameters": {
-        "jsCode": "// Dedup. Slug equality catches the same file pasted twice; an overlapping name catches \"Tendril\"\n// against \"Tendril — agent-first IDE\", which is what happens when two artifacts describe one project.\n//\n// Getting this wrong permissively merges two real projects. Getting it wrong strictly splits one\n// project's evidence across two rows — and that is the failure that makes a capability look unverified\n// when it is not. So the threshold leans permissive and the merge is non-destructive.\nconst validated = $('Validate extraction').first().json;\nconst existing = $input.all().map((i) => i.json).filter((r) => r && r.fields);\n\nconst slug = validated.project.key;\nconst match = existing.find((r) => r.fields.Key === slug);\n\nreturn [{\n  json: {\n    ...validated,\n    duplicateOf: match ? match.id : null,\n    action: match ? 'update' : 'create',\n    airtableRecordId: match ? match.id : null,\n  },\n}];"
+        "jsCode": "const validated = $('Validate extraction').first().json;\n\nconst rows = (name) => $(name).all().map((i) => i.json).filter((r) => r && r.fields);\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9+#./\\s-]+/g, ' ').replace(/\\s+/g, ' ').trim();\nconst slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\nconst csv = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);\n\nconst techRows = rows('Load technologies');\nconst capRows = rows('Load capabilities');\n\n// Existing row wins. A name that matches an existing row by name OR by alias links to it; anything left\n// over is genuinely new and gets created with a proper Key so the record stays readable.\nconst matchTech = (raw) => techRows.find((r) =>\n  [r.fields.Name].concat(csv(r.fields.Aliases)).some((a) => norm(a) === norm(raw)));\nconst matchCap = (raw) => capRows.find((r) =>\n  [r.fields.Name].concat(csv(r.fields['Match Terms'])).some((a) => norm(a) === norm(raw)));\n\n// DELIBERATE DIFFERENCE FROM THE APPLICATION PATH, and worth knowing before you compare them.\n//\n// src/pipeline/link.ts creates a row for a technology or capability the taxonomy has never seen. This\n// workflow does not: it links what already exists and returns the rest under 'unresolved' for a person\n// to add. The reason is ordering. Creating a row and linking to it in the same run means the link write\n// can land before the row write, at which point typecast creates a second, keyless row and you have a\n// duplicate that read() then skips. Reporting instead of guessing is the smaller, more honest surface.\nconst techNames = [];\nconst capNames = [];\nconst unresolved = [];\n\nfor (const raw of validated.stack || []) {\n  const hit = matchTech(raw);\n  if (!hit) { if (!unresolved.includes(raw)) unresolved.push(raw); continue; }\n  if (!techNames.includes(hit.fields.Name)) techNames.push(hit.fields.Name);\n}\n\nfor (const raw of validated.capabilities || []) {\n  const hit = matchCap(raw);\n  if (!hit) { if (!unresolved.includes(raw)) unresolved.push(raw); continue; }\n  if (!capNames.includes(hit.fields.Name)) capNames.push(hit.fields.Name);\n}\n\nreturn [{ json: { techNames, capNames, unresolved, projectName: validated.project.Name, slugOf: slug('') } }];"
+      }
+    },
+    {
+      "id": "8ef4d72a-0000-4000-8000-8ef4d72a0000",
+      "name": "Build project row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        60
+      ],
+      "parameters": {
+        "jsCode": "const validated = $('Validate extraction').first().json;\nconst resolved = $('Resolve taxonomy').first().json;\n\nconst { key, ...fields } = validated.project;\n\nreturn [{\n  json: {\n    Key: key,\n    ...fields,\n    Technologies: resolved.techNames,\n    Capabilities: resolved.capNames,\n  },\n}];"
       }
     },
     {
@@ -173,8 +220,8 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        1520,
-        140
+        1960,
+        60
       ],
       "parameters": {
         "base": {
@@ -182,7 +229,9 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "upsert",
         "table": {
           "__rl": true,
@@ -205,13 +254,26 @@
       }
     },
     {
+      "id": "0d63509f-0000-4000-8000-0d63509f0000",
+      "name": "Fan out evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        180
+      ],
+      "parameters": {
+        "jsCode": "const validated = $('Validate extraction').first().json;\nconst projectKey = validated.project.key;\nconst projectName = validated.project.Name;\nconst today = new Date().toISOString().slice(0, 10);\n\nconst slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\n\nreturn (validated.evidence || []).map((e) => ({\n  json: {\n    Key: ('ev-' + projectKey + '-' + slug(e.label) + '-' + slug(e.value).slice(0, 24)).slice(0, 96),\n    Label: e.label,\n    Kind: e.kind,\n    Value: e.value,\n    URL: e.url || '',\n    'Verified On': today,\n    Projects: [projectName],\n  },\n}));"
+      }
+    },
+    {
       "id": "699555e6-0000-4000-8000-699555e60000",
       "name": "Write evidence rows",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        1740,
-        140
+        2400,
+        180
       ],
       "parameters": {
         "base": {
@@ -219,7 +281,9 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "upsert",
         "table": {
           "__rl": true,
@@ -244,14 +308,18 @@
     {
       "id": "3a35a9c6-0000-4000-8000-3a35a9c60000",
       "name": "Respond",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
       "position": [
-        1960,
-        140
+        2180,
+        -40
       ],
       "parameters": {
-        "jsCode": "// The last node's output is the HTTP response (webhook responseMode: lastNode).\nconst validated = $('Merge or create').first().json;\nreturn [{ json: {\n  ok: true,\n  action: validated.action,\n  duplicateOf: validated.duplicateOf,\n  project: validated.project.Name,\n  warnings: validated.warnings,\n  evidenceWritten: (validated.evidence || []).length,\n} }];"
+        "respondWith": "json",
+        "responseBody": "={{ {\n  ok: true,\n  project: $('Build project row').first().json.Name,\n  key: $('Build project row').first().json.Key,\n  technologiesLinked: $('Resolve taxonomy').first().json.techNames.length,\n  capabilitiesLinked: $('Resolve taxonomy').first().json.capNames.length,\n  unresolved: $('Resolve taxonomy').first().json.unresolved,\n  evidenceWritten: ($('Validate extraction').first().json.evidence || []).length,\n  warnings: $('Validate extraction').first().json.warnings\n} }}",
+        "options": {
+          "responseCode": 200
+        }
       }
     },
     {
@@ -264,7 +332,7 @@
         420
       ],
       "parameters": {
-        "jsCode": "// The error branch. A rejection becomes a REAL ROW with the reason attached, not a log line.\n//\n// A pipeline that discards what it cannot parse produces output that looks complete and is not, and the\n// omission is invisible — the report simply never mentions the thing. A visible bad row is worth more\n// than a clean-looking gap. This is what the \"Needs Review\" view lists.\nconst failure = $input.first().json;\nconst label = 'Unparsed: ' + failure.sourceName;\n\nreturn [{\n  json: {\n    key: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),\n    Name: label,\n    Status: 'in-development',\n    Summary: 'Extraction did not produce a usable record from ' + failure.sourceName + '.',\n    'Review Status': 'needs-review',\n    'Review Reason': (failure.problems || []).join('; ') + (failure.retryable ? ' (retryable)' : ''),\n    Source: failure.sourceName,\n    'Ingested At': new Date().toISOString(),\n  },\n}];"
+        "jsCode": "// The error branch. A rejection becomes a REAL ROW with the reason attached, not a log line.\n//\n// A pipeline that discards what it cannot parse produces output that looks complete and is not, and the\n// omission is invisible — the report simply never mentions the thing. A visible bad row is worth more\n// than a clean-looking gap. This is what the \"Needs Review\" view lists.\nconst failure = $input.first().json;\nconst label = 'Unparsed: ' + failure.sourceName;\n\nreturn [{\n  json: {\n    // 'Key', not 'key'. autoMapInputData matches Airtable column names exactly and matchingColumns is\n    // [\"Key\"], so a lower-case key never matches and the parked record is never written. The error\n    // branch would itself have failed silently, which would have been a particularly bad joke.\n    Key: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),\n    Name: label,\n    Status: 'in-development',\n    Summary: 'Extraction did not produce a usable record from ' + failure.sourceName + '.',\n    'Review Status': 'needs-review',\n    'Review Reason': (failure.problems || []).join('; ') + (failure.retryable ? ' (retryable)' : ''),\n    Source: failure.sourceName,\n    'Ingested At': new Date().toISOString(),\n  },\n}];"
       }
     },
     {
@@ -282,7 +350,9 @@
           "mode": "id",
           "value": "={{ $env.AIRTABLE_BASE_ID }}"
         },
-        "options": {},
+        "options": {
+          "typecast": true
+        },
         "operation": "upsert",
         "table": {
           "__rl": true,
@@ -305,6 +375,23 @@
       }
     },
     {
+      "id": "f050c067-0000-4000-8000-f050c0670000",
+      "name": "Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1520,
+        420
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  ok: false,\n  parked: $('Build review row').first().json.Name,\n  reason: $('Build review row').first().json['Review Reason']\n} }}",
+        "options": {
+          "responseCode": 422
+        }
+      }
+    },
+    {
       "id": "d1a467b9-0000-4000-8000-d1a467b90000",
       "name": "Error branch note",
       "type": "n8n-nodes-base.stickyNote",
@@ -315,8 +402,23 @@
       ],
       "parameters": {
         "width": 480,
-        "height": 190,
-        "content": "### Needs Review — the error branch\n\nNothing is dropped here. A failed extraction becomes a Project row with `Review Status`\nset to `needs-review` and the validator's problem list in `Review Reason`.\n\n`retryable` distinguishes a malformed reply (worth asking again) from a source that simply\ncontained no project (asking again spends money to fail identically)."
+        "height": 210,
+        "content": "### Needs Review — the error branch\n\nNothing is dropped here. A failed extraction becomes a Project row with `Review Status`\nset to `needs-review` and the validator's problem list in `Review Reason`, then answers 422.\n\n`retryable` distinguishes a malformed reply (worth asking again) from a source that simply\ncontained no project (asking again spends money to fail identically)."
+      }
+    },
+    {
+      "id": "51ab1c2d-0000-4000-8000-51ab1c2d0000",
+      "name": "Linking note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1900,
+        320
+      ],
+      "parameters": {
+        "width": 520,
+        "height": 250,
+        "content": "### How the links get written\n\nEvery write is an **upsert matched on `Key`**, which is Airtable's own `performUpsert`\n— so the dedup is the write, not a separate lookup node.\n\nLinked-record fields are written as the target's **primary-field name**, not its record id,\nbecause these nodes run with `typecast: true`. That is what lets a Project link to\n\"React\" and an Evidence row link back to its Project without threading `rec…` ids around.\n\n**Deliberate difference from the app:** `src/pipeline/link.ts` creates a taxonomy row it has\nnever seen. This does not — it links what exists and returns the rest as `unresolved`, because\ncreating and linking in one run can write the link before the row and leave a duplicate."
       }
     }
   ],
@@ -369,7 +471,7 @@
       "main": [
         [
           {
-            "node": "Find existing project",
+            "node": "Load technologies",
             "type": "main",
             "index": 0
           }
@@ -383,18 +485,40 @@
         ]
       ]
     },
-    "Find existing project": {
+    "Load technologies": {
       "main": [
         [
           {
-            "node": "Merge or create",
+            "node": "Load capabilities",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Merge or create": {
+    "Load capabilities": {
+      "main": [
+        [
+          {
+            "node": "Resolve taxonomy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve taxonomy": {
+      "main": [
+        [
+          {
+            "node": "Build project row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build project row": {
       "main": [
         [
           {
@@ -409,18 +533,23 @@
       "main": [
         [
           {
-            "node": "Write evidence rows",
+            "node": "Fan out evidence",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Write evidence rows": {
+    "Fan out evidence": {
       "main": [
         [
           {
-            "node": "Respond",
+            "node": "Write evidence rows",
             "type": "main",
             "index": 0
           }
@@ -437,9 +566,24 @@
           }
         ]
       ]
+    },
+    "Write Needs Review": {
+      "main": [
+        [
+          {
+            "node": "Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
   "meta": {
     "templateCredsSetupCompleted": false
   }

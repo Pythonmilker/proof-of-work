@@ -175,7 +175,8 @@ a:hover {
 
 .mode-detail {
   position: absolute;
-  right: 24px;
+  right: 0;
+  top: 100%;
   margin-top: 8px;
   z-index: 20;
   background: var(--bg-raised);
@@ -775,4 +776,113 @@ tr.needs-review td {
   color: var(--text-faint);
   text-align: center;
   padding: 48px 20px;
+}
+
+/* ── added after the UX review ────────────────────────────────────────────────────────────────── */
+
+/*
+ * The product sentence. It used to live only in the README and in index.html's meta description,
+ * which is to say it was written for crawlers rather than for the person looking at the screen.
+ */
+.standfirst {
+  color: var(--text-dim);
+  font-size: 14px;
+  max-width: 78ch;
+  margin: -12px 0 26px;
+}
+
+.footer {
+  margin-top: 44px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.footer .mono {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.hint {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  margin: 0 0 10px;
+}
+.hint code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+/* Citations were behind an invisible click target: no caret, no hover, no focus ring. */
+.caret {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  transition: transform 120ms ease;
+  display: inline-block;
+}
+.caret.open {
+  transform: rotate(90deg);
+}
+.req-head {
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border-radius: var(--radius-sm);
+}
+.req-head:hover {
+  background: var(--bg-inset);
+}
+.req-head:hover .caret {
+  color: var(--accent);
+}
+.req-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The 78% meant nothing without saying what it weighs, and "stretch" was an undefined suffix on a
+   chip inside a collapsed panel while doing the most consequential work in the report. */
+.definitions {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin: 16px 0 0;
+  max-width: 88ch;
+  line-height: 1.6;
+}
+.definitions b {
+  font-weight: 560;
+  color: var(--text);
+}
+.definitions .proven-word { color: var(--proven); }
+.definitions .partial-word { color: var(--partial); }
+.definitions .gap-word { color: var(--gap); }
+
+.determinism {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  max-width: 88ch;
+}
+
+/* A rejected extraction gets its own panel. It used to render the success layout. */
+.reject {
+  border-left: 3px solid var(--gap);
+}
+.problems {
+  margin: 10px 0 16px;
+  padding-left: 18px;
+  color: var(--partial);
+  font-size: 13px;
+}
+.problems li {
+  margin-bottom: 4px;
+}
+
+/* The mode panel had no positioned ancestor, so it anchored to the viewport instead of the pill. */
+.mode {
+  position: relative;
 }

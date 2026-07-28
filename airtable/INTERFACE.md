@@ -29,20 +29,20 @@ Those breakpoints are for reading at a glance and are not the scoring thresholds
 
 ### 3. Requirement table
 
-`Results` is stored as JSON in one long-text field, which an Interface cannot expand into rows. Two
-honest options:
+This used to be the awkward part of the page. `Results` was an escaped JSON string in a long-text field,
+so the only options were to render the raw JSON or to put the React app next to the Interface and change
+the subject. The sixth table fixed it, and this is now the best element on the dashboard.
 
-**A. Show the JSON (two minutes).** Add a **Text** element bound to `Results`. Ugly, complete, and fine
-for a working dashboard.
+- **Element → Grid**, source `Results`
+- Filter: `Role` `is` the record picker's selection
+- Sort: `Kind` ascending, then `Status` ascending, so required gaps land at the top
+- Show `Requirement`, `Status`, `Match Score`, `Rationale`, `Evidence`
+- **Conditional colour** on `Status`: proven green, partial amber, gap red
+- Row click → open record, which shows the linked Technologies, Capabilities, Projects and Evidence
 
-**B. Add a sixth table (do not).** Splitting results into their own table would make a lovely Interface
-grid and would break the five-table constraint this project is built around. The constraint is worth
-more than the grid.
-
-**C. What is actually recommended.** Put the React fit report beside the Interface in the screenshot.
-The Interface shows the record and the score; the app shows the requirement-by-requirement breakdown
-with the citations expanded. They are two views of the same data, and saying so is more interesting
-than pretending one tool does everything.
+That last point is the one to capture. Clicking a requirement opens a record whose citations are real
+links you can follow into the Projects and Evidence tables. When results were a JSON string, those
+citations were slugs buried inside text and the base could not see them at all.
 
 ### 4. Evidence list
 

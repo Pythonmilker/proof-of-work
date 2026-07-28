@@ -17,7 +17,17 @@
  * it is the seam where a real database would be simpler.
  */
 
-import type { Capability, Evidence, Project, Role, Snapshot, Store, Technology } from './types';
+import type {
+  Capability,
+  Evidence,
+  Project,
+  Requirement,
+  RequirementResult,
+  Role,
+  Snapshot,
+  Store,
+  Technology,
+} from './types';
 
 export interface AirtableConfig {
   pat: string;
@@ -31,6 +41,7 @@ export const TABLES = {
   capabilities: 'Capabilities',
   evidence: 'Evidence',
   roles: 'Roles',
+  results: 'Results',
 } as const;
 
 /** Airtable's documented write ceiling. Exceed it and the whole request 422s, not just the extra rows. */
@@ -120,17 +131,18 @@ export class AirtableStore implements Store {
   }
 
   async read(): Promise<Snapshot> {
-    const [projects, technologies, capabilities, evidence, roles] = await Promise.all([
+    const [projects, technologies, capabilities, evidence, roles, results] = await Promise.all([
       this.listAll(TABLES.projects),
       this.listAll(TABLES.technologies),
       this.listAll(TABLES.capabilities),
       this.listAll(TABLES.evidence),
       this.listAll(TABLES.roles),
+      this.listAll(TABLES.results),
     ]);
 
     this.keyByRecord = new Map();
     this.recordByKey = new Map();
-    for (const record of [...projects, ...technologies, ...capabilities, ...evidence, ...roles]) {
+    for (const record of [...projects, ...technologies, ...capabilities, ...evidence, ...roles, ...results]) {
       const key = str(record.fields, 'Key');
       if (!key) continue;
       this.keyByRecord.set(record.id, key);
@@ -205,22 +217,48 @@ export class AirtableStore implements Store {
           projects: links(r.fields, 'Projects'),
         }),
       ),
+      /**
+       * Rebuilt from the Results table rather than parsed out of a JSON blob.
+       *
+       * Results rows carry their own requirement text, kind and category, so a row is readable on its
+       * own in the base AND the Role can be reassembled without a second source of truth.
+       */
       roles: roles.map((r): Role => {
-        const parse = <T,>(field: string, fallback: T): T => {
-          try {
-            const raw = str(r.fields, field);
-            return raw ? (JSON.parse(raw) as T) : fallback;
-          } catch {
-            return fallback;
-          }
-        };
+        const roleKey = str(r.fields, 'Key');
+        const mine = results
+          .filter((row) => links(row.fields, 'Role').includes(roleKey))
+          .sort((a, b) => str(a.fields, 'Key').localeCompare(str(b.fields, 'Key'), undefined, { numeric: true }));
+
+        const requirements: Requirement[] = mine.map((row) => ({
+          id: str(row.fields, 'Key').slice(roleKey.length + 1) || str(row.fields, 'Key'),
+          text: str(row.fields, 'Requirement'),
+          kind: (str(row.fields, 'Kind') || 'required') as Requirement['kind'],
+          category: (str(row.fields, 'Category') || 'process') as Requirement['category'],
+        }));
+
+        const roleResults: RequirementResult[] = mine.map((row, i) => ({
+          requirementId: requirements[i]?.id ?? '',
+          requirementText: str(row.fields, 'Requirement'),
+          kind: (str(row.fields, 'Kind') || 'required') as Requirement['kind'],
+          category: (str(row.fields, 'Category') || 'process') as Requirement['category'],
+          status: (str(row.fields, 'Status') || 'gap') as RequirementResult['status'],
+          shortfall: str(row.fields, 'Shortfall') || null,
+          score: num(row.fields, 'Match Score') ?? 0,
+          matchedTechnologies: links(row.fields, 'Technologies'),
+          matchedCapabilities: links(row.fields, 'Capabilities'),
+          matchedProjects: links(row.fields, 'Projects'),
+          evidence: links(row.fields, 'Evidence'),
+          rationale: str(row.fields, 'Rationale'),
+          rationaleSource: (str(row.fields, 'Rationale Source') || 'template') as RequirementResult['rationaleSource'],
+        }));
+
         return {
-          id: str(r.fields, 'Key'),
+          id: roleKey,
           title: str(r.fields, 'Title'),
           company: str(r.fields, 'Company'),
           postedText: str(r.fields, 'Posted Text'),
-          requirements: parse('Requirements', []),
-          results: parse('Results', []),
+          requirements,
+          results: roleResults,
           score: num(r.fields, 'Score') ?? 0,
           matchedAt: str(r.fields, 'Matched At'),
           model: str(r.fields, 'Model'),
@@ -323,19 +361,42 @@ export class AirtableStore implements Store {
     });
   }
 
+  /**
+   * The Role row, then one Results row per requirement.
+   *
+   * The Role has to be written first: every Results row links back to it, and a link needs a record id
+   * that does not exist until the Role is created. Same two-pass shape as everything else here.
+   */
   async saveRole(role: Role): Promise<void> {
     await this.upsertByKey(TABLES.roles, role.id, {
       Title: role.title,
       Company: role.company,
       'Posted Text': role.postedText,
-      Requirements: JSON.stringify(role.requirements),
-      Results: JSON.stringify(role.results),
       Score: role.score,
+      'Requirement Count': role.requirements.length,
       'Matched At': role.matchedAt,
       Model: role.model,
       Source: role.source,
       'Ingested At': role.ingestedAt,
     });
+
+    for (const result of role.results) {
+      await this.upsertByKey(TABLES.results, `${role.id}-${result.requirementId}`, {
+        Requirement: result.requirementText,
+        Kind: result.kind,
+        Category: result.category,
+        Status: result.status,
+        Shortfall: result.shortfall ?? '',
+        'Match Score': result.score,
+        Rationale: result.rationale,
+        'Rationale Source': result.rationaleSource,
+        Role: this.refs([role.id]),
+        Technologies: this.refs(result.matchedTechnologies),
+        Capabilities: this.refs(result.matchedCapabilities),
+        Projects: this.refs(result.matchedProjects),
+        Evidence: this.refs(result.evidence),
+      });
+    }
   }
 
   /** Batched create, used by the seeding script. Chunked to the write ceiling, in order. */

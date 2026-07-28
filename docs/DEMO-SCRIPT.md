@@ -10,7 +10,7 @@ rm -f data/session.json
 pnpm dev
 ```
 
-Browser at 1440 x 900, no bookmarks bar, no other tabs. Land on Intake with the box empty.
+Browser at 1440 x 900, no bookmarks bar, no other tabs. Land on the Fit report tab, posting already in the box.
 
 If n8n and Airtable are running, keep them in two background tabs. They appear once each, for four
 seconds, and are not driven live.
@@ -26,7 +26,7 @@ On screen: the Intake page, sample list visible. Do not move the mouse yet.
 
 **0:10 to 0:25. The mess going in.**
 
-Click `01-tendril-readme.md`. The box fills with a README.
+Click **Add evidence**, then `01-tendril-readme.md`. The box fills with a README.
 
 > "This is a real README. Prose, a feature table, a version number, a store id buried in the last
 > paragraph."
@@ -57,7 +57,7 @@ output that looks complete and is not.
 
 **0:50 to 1:05. The match.**
 
-Click Match. The posting is already in the box. Press "Score this role".
+Press "Score this role". The posting is already in the box.
 
 > "The posting gets parsed into requirements, matched against the record in code, and scored in code.
 > 78 percent. Nine proven, three partial, two gaps."
