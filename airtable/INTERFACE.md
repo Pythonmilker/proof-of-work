@@ -34,7 +34,7 @@ Then, top to bottom:
 2. **Requirement list**
    - Element: the `Results` linked-record field, displayed as a **list/grid**, grouped by `Kind`
      (required first), fields: `Requirement`, `Verdict`, `Rationale`,
-     `Evidence — check it yourself`. Hide everything else, especially `Match Score` and
+     `Receipts`. Hide everything else, especially `Match Score` and
      `Rationale Source`.
    - Colour by `Status` if the element offers conditional colour; the `Verdict` emoji carries the
      signal either way.

@@ -129,7 +129,7 @@ the parity tests hold). All relabelling happens in click-built formula fields:
 
 | On screen | Never on screen |
 |---|---|
-| Fit report · Overall match · Proven / Partial / **Not covered** · Why · What's missing · Evidence — check it yourself · Verified on {date} · Lines of code · Required / Preferred | Weighted coverage · stretch · gap (as a label) · Roles · Match Score decimals · Rationale Source · Model · Key / slugs · Aliases · Match Terms · Tier · Review Status · Ingested At |
+| Fit report · Overall match · Proven / Partial / **Not covered** · Why · What's missing · Receipts · Verified on {date} · Lines of code · Required / Preferred | Weighted coverage · stretch · gap (as a label) · Roles · Match Score decimals · Rationale Source · Model · Key / slugs · Aliases · Match Terms · Tier · Review Status · Ingested At |
 
 New click-built fields (formulas cannot be created via the API): `Status` display formula (emoji +
 word), `Verdict Summary` (Roles), `Report URL` (Roles), `Score Link` (Roles), `Evidence` rollup

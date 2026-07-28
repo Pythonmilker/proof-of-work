@@ -30,7 +30,7 @@ SWITCH(Status, "proven", "🟢 Proven", "partial", "🟠 Partial", "gap", "🔴 
 
 This is the recruiter's status column. The raw `Status` select stays hidden everywhere.
 
-### A3. Results table → field `Evidence — check it yourself`
+### A3. Results table → field `Receipts`
 
 Type: **Rollup** · linked field `Evidence` · rollup field `Receipt` · aggregation:
 
@@ -90,12 +90,12 @@ Fit report — Joel Brannan × Arootah
    - `Verdict`
    - `Rationale` — rename its label in this view is not possible; leave the name, it reads fine
    - `Shortfall`
-   - `Evidence — check it yourself`
+   - `Receipts`
    - `Projects`
    Hidden (the full list, check each): `Key`, `Kind` (it's the group header already), `Category`,
    `Status`, `Match Score`, `Rationale Source`, `Role`, `Technologies`, `Capabilities`, `Evidence`
    (the raw link — the rollup replaces it).
-5. **Row height:** Medium. Wrap on for `Rationale` and `Evidence — check it yourself` if offered.
+5. **Row height:** Medium. Wrap on for `Rationale` and `Receipts` if offered.
 6. **Colour** (view menu → Color → by single select `Status`): proven green, partial amber, gap red.
 
 ### Share it
