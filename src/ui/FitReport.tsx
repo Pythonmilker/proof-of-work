@@ -358,8 +358,9 @@ export function FitReport({
         </p>
 
         <p className="determinism">
-          Every verdict below is arithmetic. A model parses the posting and writes one sentence per
-          requirement; it never decides a status.
+          Every verdict below is arithmetic. A structured posting is read in code, keeping its own
+          words; a model reads prose-heavy postings and writes one sentence per requirement. It never
+          decides a status.
         </p>
 
         {report.notes.length > 0 ? (

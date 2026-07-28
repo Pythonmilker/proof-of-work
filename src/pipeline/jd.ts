@@ -1,13 +1,15 @@
 /**
  * Stage 4 step 1: a pasted job description becomes a list of requirements.  (DESIGN.md §6.1)
  *
- * The medium tier. Input is short and already structured by whoever wrote the posting; the work is
- * splitting bundled bullets ("React, TypeScript, and REST APIs" is three requirements, not one) and
- * deciding required vs preferred, which postings signal with words rather than sections.
+ * The deterministic reader runs first and wins whenever the posting is structured, because job
+ * postings are bullet lists and bullet lists parse — keeping the posting's own words, which the
+ * recruiter recognises and which anchor matching better than a paraphrase. The model is the path for
+ * prose-heavy postings, where there are no bullets to read.
  *
- * The deterministic fallback here is unusually good, because job postings are bullet lists and bullet
- * lists parse. It loses the bundling split and some of the required/preferred nuance; it does not lose
- * requirements.
+ * That ordering was learned, not assumed. On the real Arootah posting the model paraphrased bullets
+ * into noun phrases (dropping the React anchor from two of them), split one prose paragraph into
+ * double-counted rows, and minted "strong problem-solving skills" as a gap — a fabricated failure,
+ * in the report whose whole argument is that its failures are real.
  */
 
 import { callJson, shortReason, type LlmOptions } from '../openrouter/client';
@@ -53,7 +55,20 @@ const VALID_CATEGORY = new Set<RequirementCategory>([
   'domain',
 ]);
 
+/**
+ * How many requirements the deterministic reader must find for its result to be preferred outright.
+ * At or above this the posting is structured and code reads it verbatim; below it the posting is
+ * prose-heavy and the model earns its keep.
+ */
+const STRUCTURED_MINIMUM = 4;
+
 export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOutcome> {
+  const deterministic = parseRoleDeterministically(text);
+  if (deterministic.requirements.length >= STRUCTURED_MINIMUM) {
+    // Not a fallback — the designed primary for structured postings, so no degradation note.
+    return { role: deterministic, via: 'deterministic', model: 'none', note: null };
+  }
+
   const result = await callJson<unknown>(
     {
       tier: 'jd-parsing',
@@ -69,7 +84,7 @@ export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOu
 
   if (!result.ok) {
     return {
-      role: parseRoleDeterministically(text),
+      role: deterministic,
       via: 'deterministic',
       model: 'none',
       note: shortReason(result.error.kind),
@@ -78,10 +93,10 @@ export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOu
 
   const parsed = coerceParsedRole(result.value);
   // A model reply with nothing usable in it is worse than no model at all — the deterministic reader
-  // would at least have returned the bullets.
+  // would at least have returned what it found.
   if (parsed.requirements.length === 0) {
     return {
-      role: parseRoleDeterministically(text),
+      role: deterministic,
       via: 'deterministic',
       model: 'none',
       note: 'model returned no requirements',
