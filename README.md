@@ -3,11 +3,14 @@
 Proof of Work is a pipeline that turns messy evidence of what someone has built into a structured
 capability record, then scores that record against a pasted job description.
 
-The product is generic. The dataset it ships with belongs to one candidate, the way a CRM demo ships with
-sample contacts.
+The delivered product is an Airtable base: six linked tables, recruiter views, and a fit-report
+Interface, shared as a link that opens with no login. This repo holds everything that fills it: the
+extraction and scoring pipeline, the n8n workflows that run it, the React app that writes to it, and
+the scripts that build the base itself from one access token.
 
-You paste a job description, click one button, and get a coverage score where every claim links to
-something a stranger can check, plus a Gaps section listing what the record does not cover.
+The product is generic. The dataset it ships with belongs to one candidate, the way a CRM demo ships
+with sample contacts. A recruiter pastes a job description, and gets a scored report where every claim
+links to something a stranger can check, plus a section listing what the record does not cover.
 
 ## Requirements
 
@@ -73,8 +76,14 @@ pnpm airtable:push        # 7 projects, 44 technologies, 23 capabilities, 23 evi
 ```
 
 Provisioning needs a token with `schema.bases:write` and a workspace id. Both are idempotent, so a run
-that dies halfway is safe to repeat. Two views and one Interface still need clicking: `airtable/VIEWS.md`
-and `airtable/INTERFACE.md`.
+that dies halfway is safe to repeat. Add `--prune` to remove rows the seed no longer has; without the
+flag it only reports them.
+
+The display fields, the shared recruiter view and the Interface pages have no API and are click-built:
+`airtable/VIEWS.md` (about 25 minutes, includes the exact formulas) then `airtable/INTERFACE.md`
+(about an hour). The shared view link goes into `.env.local` as `VITE_AIRTABLE_REPORT_URL`, and
+`VITE_AIRTABLE_BASE_URL` points at the base. With those set, the app links out instead of rendering
+its own copy of the record.
 
 A credential that is set but rejected reports as rejected. `pnpm doctor` exits 1 and names the specific
 failure, and the header in the app reads `key rejected`.

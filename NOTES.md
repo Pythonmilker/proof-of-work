@@ -110,14 +110,18 @@ The ones that mattered, all fixed:
 - Prose: the write-up had no Known issues section, opened on a pronoun, carried two headers over four
   words, and repeated several README paragraphs near-verbatim. Rewritten; the grep pass is clean on both.
 
-## v2 direction (2026-07-27, designed and signed-off pending)
+## v2 IMPLEMENTED (2026-07-27, signed off: grid link, name on)
 
 The delivery architecture pivoted to Airtable-led after the base went live: the recruiter gets a
 no-login shared VIEW link (verified free-plan capability), the Interface page is the application
 screenshot and the paid-tier upgrade target, n8n stays the only engine with ZERO Airtable automations
 (script actions are not on the free plan; no plan has a native webhook action), and React shrinks to
 the ingestion surface plus score trigger. Full spec with verified platform facts: docs/DESIGN.md v2.
-Implementation is gated on sign-off. A reusable skill pack from this build landed at
+Implemented: env split + honest n8n probe + live-mode gating (confirmation card, base link-outs,
+no second fit report, no fixture counts over live data), VIEWS.md/INTERFACE.md rewritten as v2
+click-scripts with exact formulas, README/WRITEUP lead with Airtable, live screenshots captured.
+Remaining for Joel: the ~25 min VIEWS.md clicking (fields + shared view + incognito test), the
+~1 h INTERFACE.md pages, paste the share link into .env.local, three SaaS screenshots, the 75s film. A reusable skill pack from this build landed at
 _reference/skill-packs/airtable-n8n-backend/.
 
 ## Open

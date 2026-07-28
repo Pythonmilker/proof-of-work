@@ -1,13 +1,14 @@
 /**
- * The record browser — the same five tables Airtable holds, rendered locally.
+ * The record browser — demo mode's copy of the tables Airtable holds.
  *
- * It exists so the demo still reads when Airtable is not connected, and so the two can be put
- * side by side in a screenshot. Two things are called out visually because they are the schema's whole
+ * In live mode this screen refuses to render: the base is the record, and a local copy would be a
+ * duplicate at best and, on the n8n path, the bundled seed masquerading as live data. Two things are called out visually because they are the schema's whole
  * argument: a project parked in Needs Review, and a capability with nothing linked to it.
  */
 
 import { useState } from 'react';
 import type { Snapshot } from '../store/types';
+import { AIRTABLE_BASE_URL, AIRTABLE_REPORT_URL } from './api';
 
 type Tab = 'projects' | 'technologies' | 'capabilities' | 'evidence' | 'roles';
 
@@ -19,8 +20,36 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'roles', label: 'Roles' },
 ];
 
-export function Records({ snapshot }: { snapshot: Snapshot | null }) {
+export function Records({ snapshot, live }: { snapshot: Snapshot | null; live: boolean }) {
   const [tab, setTab] = useState<Tab>('projects');
+
+  if (live) {
+    // The record IS the Airtable base in live mode, and this tab rendering its own copy is a duplicate
+    // at best — and in n8n mode a lie, since the only snapshot available here is the bundled seed.
+    return (
+      <>
+        <h1>The record lives in Airtable</h1>
+        <p className="lede">
+          Six tables, the recruiter views, and the fit-report Interface are the delivered product. This
+          app writes to them; it does not keep a second copy.
+        </p>
+        <div className="actions">
+          {AIRTABLE_BASE_URL ? (
+            <a className="btn" href={AIRTABLE_BASE_URL} target="_blank" rel="noreferrer">
+              Open the base ↗
+            </a>
+          ) : (
+            <span className="mono">Set VITE_AIRTABLE_BASE_URL in .env.local for a one-click link.</span>
+          )}
+          {AIRTABLE_REPORT_URL ? (
+            <a className="btn ghost" href={AIRTABLE_REPORT_URL} target="_blank" rel="noreferrer">
+              Open the shared fit report ↗
+            </a>
+          ) : null}
+        </div>
+      </>
+    );
+  }
 
   if (!snapshot) return <div className="empty">Loading the record…</div>;
 
@@ -34,9 +63,9 @@ export function Records({ snapshot }: { snapshot: Snapshot | null }) {
     <>
       <h1>The record</h1>
       <p className="lede">
-        Five tables. Projects hold the work, Technologies and Capabilities describe it, Evidence proves
-        it, and Roles hold every posting scored against it. In Airtable these are five tables with two
-        recruiter views over them.
+        Six tables. Projects hold the work, Technologies and Capabilities describe it, Evidence proves
+        it, Roles hold every posting scored against it, and Results hold each posting&rsquo;s verdicts. In
+        Airtable these are the same six tables with recruiter views over them.
       </p>
 
       {parked > 0 ? (

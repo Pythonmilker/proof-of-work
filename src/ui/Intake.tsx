@@ -16,7 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Snapshot } from '../store/types';
 import type { IntakeState } from './App';
-import { ingest, loadSample, type IngestResult, type SampleFile } from './api';
+import { AIRTABLE_BASE_URL, ingest, loadSample, type IngestResult, type SampleFile } from './api';
 
 const STAGE_ORDER = ['extract', 'validate', 'dedup', 'link', 'write'] as const;
 
@@ -172,12 +172,14 @@ function BeforeAfter({ blob, result }: { blob: string; result: IngestResult }) {
 export function Intake({
   samples,
   snapshot,
+  live,
   state,
   onState,
   onChanged,
 }: {
   samples: SampleFile[];
   snapshot: Snapshot | null;
+  live: boolean;
   state: IntakeState;
   onState: (next: IntakeState) => void;
   onChanged: () => void;
@@ -188,7 +190,8 @@ export function Intake({
   const latest = useRef(state);
   latest.current = state;
 
-  const { blob, sourceName, result, ingestedBlob } = state;
+  const { blob, sourceName, outcome, ingestedBlob } = state;
+  const result: IngestResult | null = outcome?.kind === 'full' ? outcome.result : null;
   const patch = (next: Partial<IntakeState>) => onState({ ...latest.current, ...next });
 
   const parked = snapshot?.projects.filter((p) => p.reviewStatus === 'needs-review').length ?? 0;
@@ -204,7 +207,7 @@ export function Intake({
   async function pickSample(name: string) {
     setError(null);
     try {
-      patch({ blob: await loadSample(name), sourceName: name, result: null });
+      patch({ blob: await loadSample(name), sourceName: name, outcome: null });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -214,10 +217,10 @@ export function Intake({
     if (!blob.trim() || running) return;
     setRunning(true);
     setError(null);
-    patch({ result: null, ingestedBlob: blob });
+    patch({ outcome: null, ingestedBlob: blob });
     try {
       const next = await ingest(blob, sourceName);
-      patch({ result: next, ingestedBlob: blob });
+      patch({ outcome: next, ingestedBlob: blob });
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -231,13 +234,13 @@ export function Intake({
     setOver(false);
     const file = event.dataTransfer.files[0];
     if (!file) return;
-    patch({ blob: await file.text(), sourceName: file.name, result: null });
+    patch({ blob: await file.text(), sourceName: file.name, outcome: null });
   }
 
   useEffect(() => {
     // Clearing the box invalidates the panel below it. Showing a record beside input it did not come
     // from is exactly the quiet lie this project exists to avoid.
-    if (!blob.trim() && latest.current.result) patch({ result: null });
+    if (!blob.trim() && latest.current.outcome) patch({ outcome: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blob]);
 
@@ -279,7 +282,7 @@ export function Intake({
             </button>
             <button
               className="btn ghost"
-              onClick={() => patch({ blob: '', sourceName: 'pasted-input', result: null })}
+              onClick={() => patch({ blob: '', sourceName: 'pasted-input', outcome: null })}
               disabled={running || !blob}
             >
               Clear
@@ -297,6 +300,21 @@ export function Intake({
           <p className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
             The record, right now
           </p>
+          {!snapshot && live ? (
+            // n8n mode: the record lives in Airtable and this app holds no credential to read it back.
+            // Counting the bundled seed here would show fixture numbers while writes land in a real
+            // base — the exact silent lie the boundary audit caught.
+            <p className="hint" style={{ marginBottom: 0 }}>
+              The record lives in Airtable.{' '}
+              {AIRTABLE_BASE_URL ? (
+                <a href={AIRTABLE_BASE_URL} target="_blank" rel="noreferrer">
+                  Open the base ↗
+                </a>
+              ) : (
+                'Set VITE_AIRTABLE_BASE_URL for a one-click link.'
+              )}
+            </p>
+          ) : (
           <div className="counts">
             <div>
               <b className="num">{counts.projects}</b>
@@ -323,6 +341,7 @@ export function Intake({
               <span>needs review</span>
             </div>
           </div>
+          )}
         </div>
 
         <div>
@@ -367,6 +386,51 @@ export function Intake({
                 <p className="section-label">After — nothing written</p>
                 <Rejected result={result} />
               </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {outcome?.kind === 'live' ? (
+        <div style={{ marginTop: 28 }}>
+          {outcome.summary.ok ? (
+            <div className="card">
+              <p className="section-label">Written to the base</p>
+              <dl className="fields">
+                <dt>project</dt>
+                <dd>{outcome.summary.project ?? '—'}</dd>
+                <dt>linked</dt>
+                <dd>
+                  {outcome.summary.technologiesLinked ?? 0} technologies,{' '}
+                  {outcome.summary.capabilitiesLinked ?? 0} capabilities,{' '}
+                  {outcome.summary.evidenceWritten ?? 0} receipts
+                </dd>
+              </dl>
+              {(outcome.summary.unresolved?.length ?? 0) > 0 ? (
+                // The workflow deliberately links only what exists and hands back the rest — the
+                // taxonomy is curated in the product the hiring team owns, not invented by a pipeline.
+                <div className="notice" style={{ marginTop: 14, marginBottom: 0 }}>
+                  {outcome.summary.unresolved?.length} term
+                  {(outcome.summary.unresolved?.length ?? 0) === 1 ? '' : 's'} not in the taxonomy yet:{' '}
+                  {outcome.summary.unresolved?.join(', ')}. Add the ones that belong as rows in the base;
+                  the rest were noise worth dropping.
+                </div>
+              ) : null}
+              {AIRTABLE_BASE_URL ? (
+                <div className="actions" style={{ marginTop: 14 }}>
+                  <a className="btn ghost" href={AIRTABLE_BASE_URL} target="_blank" rel="noreferrer">
+                    Open the base ↗
+                  </a>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="card reject">
+              <p className="section-label">Rejected — parked in Needs Review</p>
+              <p style={{ marginTop: 0 }}>
+                Validation refused this source. A row named {outcome.summary.parked ?? 'Unparsed'} was
+                written with the reason attached: {outcome.summary.reason ?? 'no reason returned'}
+              </p>
             </div>
           )}
         </div>

@@ -1,69 +1,77 @@
-# The Interface dashboard
+# Click-script 2: the two Interface pages (~60–90 minutes)
 
-Interfaces have no API either, so this is a click-script. Fifteen minutes, and it is screenshot #3.
+Prerequisite: every field in `VIEWS.md` §A exists. Interfaces have no API; this is the by-hand half.
 
-The goal is one screen a non-engineer can read without being walked through it: which role was scored,
-how well it came out, and what the evidence is behind each line.
+Plan reality (verified 2026-07-27): on the Free plan these pages **cannot be shared publicly** — they
+reach only invited collaborators with Airtable accounts. That is fine and planned-for: page 1 is the
+**screenshot embedded in the application** (and becomes a public URL if a Team seat is ever added);
+page 2 is operator-only. The recruiter's actual link is the shared view from `VIEWS.md` §B.
 
-## Build it
+Use the **modern layouts** when prompted. Do not pick the legacy "Blank" layout — it is excluded from
+sharing and deep links, and the screenshot should show the current product, not the deprecated one.
 
-**Interfaces → + → Start from scratch → Blank page.** Name it `Fit Report`.
+## Page 1 — `Fit report` (the screenshot)
 
-### 1. Role header
+**Interfaces → Create → start from Record detail** (called "Record review" in some versions), source
+table **Roles**.
 
-- Add an **Element → Text**, set to a field from `Roles`: `Title`
-- Below it, another **Text** bound to `Company`
-- Add a **Filter** element at the top of the page, source `Roles`, so the page is per-record
+Configure the page:
 
-Set the page's record picker to `Roles`, sorted by `Matched At` descending, so it opens on the most
-recent run.
+- Record picker: **hidden** — pin the page to the Arootah posting record (choose it as the default /
+  "specific record" if offered; otherwise leave the picker but screenshot with it collapsed).
+- Title element (static text): `Joel Brannan` on one line, then
+  `Fit report — AI Product Engineer, Arootah` as the heading.
+- Subtitle (static text): `Scored 27 Jul 2026 · against your posting as written`
 
-### 2. Coverage gauge
+Then, top to bottom:
 
-- **Element → Number** → source `Roles.Score`
-- Set the label to `Weighted coverage`, suffix `%`
-- **Conditional colour**: ≥ 75 green, 50–74 amber, < 50 red
+1. **Verdict block**
+   - Field element: `Verdict Summary`, large text size. This is the headline — a fraction grades
+     itself; a lone percentage invites "is that good?".
+   - Field element beside it: `Score`, label overridden to **`Overall match`**, with a static text
+     footnote right under it: `Must-haves count double.`
+   - The word "weighted" must not appear anywhere on the page.
+2. **Requirement list**
+   - Element: the `Results` linked-record field, displayed as a **list/grid**, grouped by `Kind`
+     (required first), fields: `Requirement`, `Verdict`, `Rationale`,
+     `Evidence — check it yourself`. Hide everything else, especially `Match Score` and
+     `Rationale Source`.
+   - Colour by `Status` if the element offers conditional colour; the `Verdict` emoji carries the
+     signal either way.
+3. **Not covered section**
+   - Static text header: `Not covered`
+   - Static text sub-line: `Listed here so nothing surfaces late in your process.`
+   - Second `Results` element, filtered `Status is gap` OR (`Status is partial` AND `Kind is
+     required`) if the element supports filters; otherwise skip this element — the grouped list above
+     already shows the red rows — and keep just the two text lines above the footer.
+   - Static text closing line: `Worth probing in a first call.`
+   - Same typography as the wins. A report that shrinks its gaps is apologising; one that formats
+     them identically is auditing.
+4. **Footer trust line** (static text, small):
+   `Every Proven line links to something you can check without contacting the candidate. Scores are
+   computed by fixed rules, identical for every posting — never by an AI.`
+5. **Owner button** (optional): Button element → action **Go to URL** → dynamic, field `Score Link`.
+   Label: `Score this posting`. Read-only viewers can click URL buttons; only you will ever see this
+   page anyway on Free.
 
-Those breakpoints are for reading at a glance and are not the scoring thresholds — those live in
-`src/pipeline/score.ts` and are the only ones that decide anything.
+**Screenshot** (this page is deliverable screenshot #3): full page at 1440px+, verdict block and at
+least one 🟢 row AND the red rows in the same frame. Green and red together is the argument.
 
-### 3. Requirement table
+## Page 2 — `Pipeline` (operator only, never shared, screenshot #4 if wanted)
 
-This used to be the awkward part of the page. `Results` was an escaped JSON string in a long-text field,
-so the only options were to render the raw JSON or to put the React app next to the Interface and change
-the subject. The sixth table fixed it, and this is now the best element on the dashboard.
+Same interface, add a page → **Dashboard** layout, source **Projects**.
 
-- **Element → Grid**, source `Results`
-- Filter: `Role` `is` the record picker's selection
-- Sort: `Kind` ascending, then `Status` ascending, so required gaps land at the top
-- Show `Requirement`, `Status`, `Match Score`, `Rationale`, `Evidence`
-- **Conditional colour** on `Status`: proven green, partial amber, gap red
-- Row click → open record, which shows the linked Technologies, Capabilities, Projects and Evidence
+- Number element: source `Projects`, filter `Review Status is needs-review`, aggregation **Count**,
+  label `Records parked for review`.
+- List element: source `Projects`, same filter, fields `Name`, `Review Reason`, `Source`. Label the
+  section `Needs review — kept, with the reason attached`.
+- List element: source `Roles`, fields `Title`, `Company`, `Score`, `Model`, `Matched At`. Label it
+  `Scoring runs`. This is where `Model` and `Rationale Source` transparency lives — on the operator
+  page, where "parked for review" reads as diligence, not as broken data.
 
-That last point is the one to capture. Clicking a requirement opens a record whose citations are real
-links you can follow into the Projects and Evidence tables. When results were a JSON string, those
-citations were slugs buried inside text and the base could not see them at all.
+## Order of operations
 
-### 4. Evidence list
-
-- **Element → List** → source `Evidence`
-- Filter: `Projects` `has any of` → linked from the record picker
-- Show `Label`, `Value`, `URL`
-- Row click → open record
-
-### 5. Needs Review counter
-
-- **Element → Number** → source `Projects`, filtered to `Review Status is needs-review`, aggregation
-  `Count`
-- Label it `Records parked for review`
-
-Small, and it is the element that makes the error branch visible on a dashboard rather than only in a
-table.
-
-## What to capture
-
-Land on the most recent `Roles` record, gauge visible, Evidence list populated, Needs Review count at 1
-after ingesting `raw/11-broken-fragment.txt`.
-
-Widen the browser to at least 1440px first — Interfaces stack into a single column below about 1100px,
-and a stacked dashboard photographs badly.
+1. `VIEWS.md` §A fields (10 min) → §B shared view + incognito test (10 min) → §C operator views (3 min)
+2. This file: page 1 (45 min), page 2 (15 min)
+3. Tell Claude the incognito test result and paste the share link into `.env.local` — the React app's
+   "Open the fit report ↗" button reads it.

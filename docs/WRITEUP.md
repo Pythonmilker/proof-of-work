@@ -3,21 +3,23 @@
 Proof of Work is a pipeline that turns messy evidence of what someone has built into a structured record
 where every claim links to something checkable, then scores that record against a pasted job description.
 
-Paste a posting, click one button, get a coverage number, a verdict per requirement with citations, and a
-Gaps section listing what the record does not cover.
+The delivered product is the Airtable base. A recruiter opens a shared view link, with no login and no account,
+and reads the fit report: a verdict per requirement with citations, and a section listing what the
+record does not cover. The React app in this repo is the write surface: it runs the ingestion pipeline
+with every stage visible, which is the one job a spreadsheet cannot do, and writes the results back to
+the base.
 
 The dataset it ships with belongs to one candidate. The product is generic, the same way a CRM demo ships
 with sample contacts.
 
 ## Stack
 
-React and TypeScript on the front. Airtable as the application backend: six tables, three views,
-one Interface dashboard, created from a single access token by `pnpm airtable:provision`. Two n8n
-workflows carry the pipeline, committed as JSON and generated from the TypeScript that also runs them
-locally. One Zap sends a Slack notification when a new fit report is written.
-
-n8n carries the pipeline and Zapier carries the notification. The pipeline needs branching, code nodes
-and version control; a channel message needs none of those.
+Airtable is the application: six linked tables, recruiter views, and a fit-report Interface, all built
+from a single access token by `pnpm airtable:provision`, so the schema is version-controlled code
+rather than clicks. Two n8n workflows carry the pipeline, committed as JSON, generated from the same TypeScript
+that runs locally, and verified to import into a real self-hosted instance. React and TypeScript
+provide the write surface. Zapier was considered and cut: n8n does the same job with branching, code
+nodes and version control, and a tool kept to tick a checkbox would be decoration.
 
 ## Models
 

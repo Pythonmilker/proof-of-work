@@ -73,7 +73,7 @@ counter at 1 after ingesting `raw/11-broken-fragment.txt`.
 
 ## 4. Raw blob against structured record  (PICK)
 
-**No accounts needed.** Already captured as `06-before-after.png`.
+**No accounts needed.** Already captured as `06-before-after.png`. The live-mode pair (`10-live-landing.png`, `11-live-confirmation.png`) shows the app writing to the real base.
 
 Intake screen. Click `01-tendril-readme.md`, press Ingest, scroll to the before-and-after panel. Left is
 2,471 characters of prose; right is the structured record with the metrics, the chips and the receipts.

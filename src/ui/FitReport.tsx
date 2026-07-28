@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import type { CoverageStatus, Requirement, Snapshot } from '../store/types';
 import type { MatchState } from './App';
-import { match, type MatchReport } from './api';
+import { AIRTABLE_BASE_URL, AIRTABLE_REPORT_URL, match, type MatchReport } from './api';
 import { SAMPLE_POSTING, SAMPLE_POSTING_LABEL } from './sample-posting';
 
 const MARKER: Record<CoverageStatus, string> = { proven: '●', partial: '◐', gap: '○' };
@@ -137,33 +137,139 @@ function Row({
   );
 }
 
+/**
+ * Live mode ends on this card, not on a second fit report.
+ *
+ * The delivered report is the Airtable surface; rendering a full duplicate here would leave a reviewer
+ * with two reports and a question about which one is real. React confirms what it wrote — score,
+ * counts, the gaps that matter — and hands over.
+ */
+function LiveConfirmation({
+  score,
+  proven,
+  partial,
+  gap,
+  title,
+  gapLines,
+  onAgain,
+}: {
+  score: number;
+  proven: number;
+  partial: number;
+  gap: number;
+  title: string;
+  gapLines: string[];
+  onAgain: () => void;
+}) {
+  return (
+    <div className="card">
+      <h1 style={{ marginBottom: 2 }}>Written to the base</h1>
+      <p className="mono" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
+        {title} · one Roles row and {proven + partial + gap} Results rows, citations as links
+      </p>
+
+      <div className="report-head" style={{ marginTop: 8 }}>
+        <div className="legend" style={{ flex: 1, alignItems: 'center' }}>
+          <span style={{ color: 'var(--proven)' }}>● {proven} proven</span>
+          <span style={{ color: 'var(--partial)' }}>◐ {partial} partial</span>
+          <span style={{ color: 'var(--gap)' }}>○ {gap} not covered</span>
+        </div>
+        <div className="gauge">
+          <div className="value">{score}%</div>
+          <div className="caption">overall match</div>
+        </div>
+      </div>
+
+      {gapLines.length > 0 ? (
+        <p className="definitions" style={{ marginTop: 6 }}>
+          Not covered: {gapLines.join(' · ')}
+        </p>
+      ) : null}
+
+      <div className="actions" style={{ marginTop: 16 }}>
+        {AIRTABLE_REPORT_URL ? (
+          <a className="btn" href={AIRTABLE_REPORT_URL} target="_blank" rel="noreferrer">
+            Open the fit report ↗
+          </a>
+        ) : (
+          <span className="mono" style={{ color: 'var(--text-faint)' }}>
+            Set VITE_AIRTABLE_REPORT_URL to the shared view link for a one-click handoff
+          </span>
+        )}
+        {AIRTABLE_BASE_URL ? (
+          <a className="btn ghost" href={AIRTABLE_BASE_URL} target="_blank" rel="noreferrer">
+            Open the base ↗
+          </a>
+        ) : null}
+        <button className="btn ghost" onClick={onAgain}>
+          Score another role
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function FitReport({
   snapshot,
+  live,
   state,
   onState,
   onChanged,
 }: {
   snapshot: Snapshot | null;
+  live: boolean;
   state: MatchState;
   onState: (next: MatchState) => void;
   onChanged: () => void;
 }) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { text, report } = state;
+  const { text, outcome, loadedFromRole } = state;
+  const report = outcome?.kind === 'full' ? outcome.report : null;
 
   async function run() {
     if (!text.trim() || running) return;
     setRunning(true);
     setError(null);
     try {
-      onState({ text, report: await match(text) });
+      onState({ text, outcome: await match(text), loadedFromRole });
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setRunning(false);
     }
+  }
+
+  const clear = (nextText: string) => onState({ text: nextText, outcome: null, loadedFromRole: null });
+
+  // Live outcomes end on the confirmation card, whichever backend produced them.
+  if (outcome?.kind === 'live' && outcome.summary.ok) {
+    const s = outcome.summary;
+    return (
+      <LiveConfirmation
+        score={s.coverage?.score ?? 0}
+        proven={s.coverage?.proven ?? 0}
+        partial={s.coverage?.partial ?? 0}
+        gap={s.coverage?.gap ?? 0}
+        title={`${s.role ?? 'Role'}${s.company ? ` at ${s.company}` : ''}`}
+        gapLines={(s.gaps ?? []).filter((g) => g.status !== 'partial').map((g) => g.requirement.text).slice(0, 4)}
+        onAgain={() => clear(text)}
+      />
+    );
+  }
+  if (report && live) {
+    return (
+      <LiveConfirmation
+        score={report.coverage.score}
+        proven={report.coverage.proven}
+        partial={report.coverage.partial}
+        gap={report.coverage.gap}
+        title={`${report.role.title}${report.role.company ? ` at ${report.role.company}` : ''}`}
+        gapLines={report.gaps.filter((g) => g.status === 'gap').map((g) => g.requirement.text).slice(0, 4)}
+        onAgain={() => clear(text)}
+      />
+    );
   }
 
   if (!report) {
@@ -181,7 +287,7 @@ export function FitReport({
         <div className="card">
           <textarea
             value={text}
-            onChange={(e) => onState({ text: e.target.value, report: null })}
+            onChange={(e) => onState({ text: e.target.value, outcome: null, loadedFromRole: null })}
             spellCheck={false}
             aria-label="Job description"
             style={{ minHeight: 340 }}
@@ -190,10 +296,10 @@ export function FitReport({
             <button className="btn" onClick={run} disabled={!text.trim() || running}>
               {running ? 'Scoring…' : 'Score this role'}
             </button>
-            <button className="btn ghost" onClick={() => onState({ text: SAMPLE_POSTING, report: null })} disabled={running}>
+            <button className="btn ghost" onClick={() => clear(SAMPLE_POSTING)} disabled={running}>
               Reset to sample
             </button>
-            <button className="btn ghost" onClick={() => onState({ text: '', report: null })} disabled={running}>
+            <button className="btn ghost" onClick={() => clear('')} disabled={running}>
               Clear
             </button>
           </div>
@@ -321,7 +427,7 @@ export function FitReport({
       </section>
 
       <div className="actions" style={{ marginTop: 20 }}>
-        <button className="btn ghost" onClick={() => onState({ text, report: null })}>
+        <button className="btn ghost" onClick={() => clear(text)}>
           Score another role
         </button>
         <span className="mono" style={{ color: 'var(--text-faint)' }}>
