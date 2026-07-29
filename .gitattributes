@@ -1,0 +1,4 @@
+# Generated files are compared byte-for-byte against their generator's output, which writes LF.
+# Without this, core.autocrlf rewrites them to CRLF on checkout and the drift check reports phantom
+# drift on every fresh Windows clone.
+n8n/*.json text eol=lf

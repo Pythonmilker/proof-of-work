@@ -1265,7 +1265,9 @@ function main(): void {
     const next = serialize(content);
 
     if (check) {
-      const current = existsSync(path) ? readFileSync(path, 'utf8') : '';
+      // CRLF-normalised: core.autocrlf rewrites the committed file on Windows checkouts, and a
+      // byte-exact check would report phantom drift on every fresh clone. .gitattributes pins LF.
+      const current = existsSync(path) ? readFileSync(path, 'utf8').replace(/\r\n/g, '\n') : '';
       if (current !== next) {
         drifted += 1;
         console.error(`✕ ${file} has drifted from the source. Run: pnpm n8n:build`);

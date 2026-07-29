@@ -43,8 +43,12 @@ const both = [
 describe('the committed JSON matches the source', () => {
   it.each(WORKFLOWS.map((w) => w.file))('%s has not drifted', (file) => {
     // The same check `pnpm n8n:build --check` runs, so drift fails the suite and not only the build.
+    // CRLF-normalised: on Windows a checkout rewrites the committed file's line endings, and a drift
+    // check that fails on \r\n reports phantom drift on every fresh clone. .gitattributes pins the
+    // files to LF; the normalisation here makes the check hold even where that hasn't applied yet.
     const generated = `${JSON.stringify(WORKFLOWS.find((w) => w.file === file)?.content, null, 2)}\n`;
-    expect(readFileSync(join(process.cwd(), 'n8n', file), 'utf8')).toBe(generated);
+    const committed = readFileSync(join(process.cwd(), 'n8n', file), 'utf8').replace(/\r\n/g, '\n');
+    expect(committed).toBe(generated);
   });
 });
 
