@@ -2,9 +2,12 @@
  * The `/api` surface, and the reason it exists.
  *
  * The OpenRouter key must not end up in a browser bundle, so the pipeline runs here, in Node, behind
- * four endpoints. Those four are deliberately the same shape n8n exposes — a webhook takes JSON and
+ * the `/api` endpoints. They are deliberately the same shape n8n exposes — a webhook takes JSON and
  * returns JSON — so the React app talks to one contract and does not know or care which side answered.
- * Point `VITE_PIPELINE_ENDPOINT` at an n8n webhook and nothing in the UI changes.
+ *
+ * The n8n path goes through here too (`/api/pipeline/*`): the browser never calls the webhooks
+ * directly, because the shared app token they require lives in THIS process's environment and must
+ * never reach a bundle. See DESIGN.md §v3.7 — the client contains nothing exploitable.
  *
  * With no key at all, the browser skips this entirely and runs the same pipeline module client-side on
  * the deterministic path, which is why `pnpm build` still produces a working static site.
@@ -12,7 +15,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { ingest, matchRole } from '../pipeline';
+import { ingest, ingestResume, matchRole } from '../pipeline';
 import { LocalStore } from '../store/local';
 import { AirtableStore, detectMode, probe, type Env } from '../store';
 import type { Store } from '../store/types';
@@ -20,6 +23,21 @@ import { filePersistence } from './persistence';
 
 const STATE_FILE = join(process.cwd(), 'data', 'session.json');
 const RAW_DIR = join(process.cwd(), 'raw');
+
+/**
+ * An error that knows its HTTP status. The Vite middleware duck-types `status` off anything thrown
+ * (it loads this module through its own graph, so `instanceof` across that boundary is unreliable);
+ * everything without one stays a 500. Exists so the n8n proxy can answer 503 — "not configured" is a
+ * service state, not a server bug.
+ */
+export class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 
 let cached: { store: Store; signature: string } | null = null;
 
@@ -47,6 +65,97 @@ function storeFor(env: Env): Store {
 function llmOptions(env: Env): { apiKey: string | undefined } {
   const key = env.OPENROUTER_API_KEY?.trim();
   return { apiKey: key ? key : undefined };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * The n8n proxy.  (DESIGN.md §v3.7 — the client never holds the token)
+ *
+ * The webhooks require an `x-pow-app-token` header. That token is attached HERE, from this process's
+ * environment — the browser sends a plain request to `/api/pipeline/*` and never sees the secret. It
+ * is deliberately not a VITE_ variable: a VITE_ prefix is a promise to bundle the value into client
+ * code, which is exactly what must not happen.
+ * ───────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** Webhook paths under the n8n base, matching the webhook nodes in n8n/build.ts exactly. */
+const N8N_WEBHOOKS: Record<string, string> = {
+  '/api/pipeline/extract': 'proof-of-work/extract',
+  '/api/pipeline/match': 'proof-of-work/match',
+};
+
+function n8nBase(rawEnv: Record<string, string>): string {
+  return (rawEnv['VITE_PIPELINE_ENDPOINT'] ?? process.env['VITE_PIPELINE_ENDPOINT'] ?? '')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
+function appToken(rawEnv: Record<string, string>): string {
+  return (rawEnv['POW_APP_TOKEN'] ?? process.env['POW_APP_TOKEN'] ?? '').trim();
+}
+
+/**
+ * Forward one request to its n8n webhook, token attached.
+ *
+ * Missing configuration answers 503 with the reason named — 'POW_APP_TOKEN not configured' is a
+ * message someone can act on, and a proxy that quietly forwarded without the token would just move
+ * the failure into n8n's 401, one hop further from the person who can fix it.
+ */
+async function proxyToN8n(path: string, body: unknown, rawEnv: Record<string, string>): Promise<unknown> {
+  const base = n8nBase(rawEnv);
+  if (!base) throw new HttpError('n8n endpoint not configured (set VITE_PIPELINE_ENDPOINT)', 503);
+  const token = appToken(rawEnv);
+  if (!token) throw new HttpError('POW_APP_TOKEN not configured', 503);
+
+  const upstream = await fetch(`${base}/${N8N_WEBHOOKS[path]}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-pow-app-token': token },
+    body: JSON.stringify(body ?? {}),
+  });
+  const payload: unknown = await upstream.json().catch(() => null);
+  if (!upstream.ok) {
+    const detail =
+      typeof payload === 'object' && payload !== null && 'error' in payload
+        ? String((payload as { error: unknown }).error)
+        : `n8n answered HTTP ${upstream.status}`;
+    throw new HttpError(detail, upstream.status);
+  }
+  return payload;
+}
+
+export interface PipelineHealth {
+  /** Is VITE_PIPELINE_ENDPOINT set server-side at all? */
+  configured: boolean;
+  /** Did the match webhook answer anything? Any HTTP response is proof of life. */
+  reachable: boolean;
+  /** Is POW_APP_TOKEN set server-side? Without it every proxied call is a labeled 503. */
+  tokenConfigured: boolean;
+  /** One sentence a person can act on when something above is false. */
+  detail: string;
+}
+
+/** The n8n health probe, server-side — the browser asks this instead of touching the webhook. */
+async function probePipeline(rawEnv: Record<string, string>): Promise<PipelineHealth> {
+  const base = n8nBase(rawEnv);
+  const tokenConfigured = appToken(rawEnv).length > 0;
+  if (!base) {
+    return { configured: false, reachable: false, tokenConfigured, detail: 'VITE_PIPELINE_ENDPOINT is not set' };
+  }
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    // n8n answers 404 on a GET to a POST-only webhook, which is still proof of life.
+    await fetch(`${base}/${N8N_WEBHOOKS['/api/pipeline/match']}`, { method: 'GET', signal: controller.signal });
+    clearTimeout(timer);
+    return {
+      configured: true,
+      reachable: true,
+      tokenConfigured,
+      detail: tokenConfigured
+        ? `Webhook reachable at ${base}, token attached server-side`
+        : 'Webhook reachable, but POW_APP_TOKEN is not configured — every call will answer 503',
+    };
+  } catch {
+    return { configured: true, reachable: false, tokenConfigured, detail: `n8n at ${base} did not respond` };
+  }
 }
 
 export interface SampleFile {
@@ -93,6 +202,29 @@ export async function handle(path: string, body: unknown, rawEnv: Record<string,
       return await storeFor(env).read();
     }
 
+    case '/api/candidates': {
+      // Counts come from the `candidate` stamp on each row, not from the mirror arrays on the
+      // Candidate — the stamp is written by every pipeline path, so it cannot go stale.
+      const snap = await storeFor(env).read();
+      return {
+        candidates: snap.candidates.map((c) => {
+          const claims = snap.capabilities.filter((cap) => cap.candidate === c.id);
+          return {
+            id: c.id,
+            name: c.name,
+            contact: c.contact,
+            source: c.source,
+            ingestedAt: c.ingestedAt,
+            projects: snap.projects.filter((p) => p.candidate === c.id && p.reviewStatus === 'ok').length,
+            claims: {
+              verified: claims.filter((cap) => cap.evidence.length > 0).length,
+              unverified: claims.filter((cap) => cap.evidence.length === 0).length,
+            },
+          };
+        }),
+      };
+    }
+
     case '/api/sample': {
       const name = String(input['name'] ?? '');
       // Path traversal is the obvious risk on a read-a-file endpoint, and a basename check is the
@@ -106,14 +238,38 @@ export async function handle(path: string, body: unknown, rawEnv: Record<string,
     case '/api/ingest': {
       const blob = String(input['blob'] ?? '');
       const sourceName = String(input['sourceName'] ?? 'pasted-input');
+      const candidateId = typeof input['candidateId'] === 'string' ? input['candidateId'].trim() : '';
       if (!blob.trim()) throw new Error('nothing to ingest');
-      return await ingest(blob, sourceName, storeFor(env), llmOptions(env));
+      return await ingest(blob, sourceName, storeFor(env), {
+        ...llmOptions(env),
+        ...(candidateId ? { candidateId } : {}),
+      });
+    }
+
+    case '/api/ingest-resume': {
+      const text = String(input['text'] ?? '');
+      const sourceName = String(input['sourceName'] ?? 'pasted-resume');
+      if (!text.trim()) throw new Error('nothing to read — paste the resume text');
+      return await ingestResume(text, sourceName, storeFor(env), llmOptions(env));
     }
 
     case '/api/match': {
       const text = String(input['text'] ?? '');
+      const candidateId = typeof input['candidateId'] === 'string' ? input['candidateId'].trim() : '';
       if (!text.trim()) throw new Error('no job description supplied');
-      return await matchRole(text, storeFor(env), llmOptions(env));
+      return await matchRole(text, storeFor(env), {
+        ...llmOptions(env),
+        ...(candidateId ? { candidateId } : {}),
+      });
+    }
+
+    case '/api/pipeline/health': {
+      return await probePipeline(rawEnv);
+    }
+
+    case '/api/pipeline/extract':
+    case '/api/pipeline/match': {
+      return await proxyToN8n(path, body, rawEnv);
     }
 
     case '/api/reset': {

@@ -34,7 +34,8 @@ function pipelineApi(env: Record<string, string>): Plugin {
           // Reads are GETs so they can be opened in a browser tab while debugging; everything that
           // changes state is a POST.
           if (req.method === 'GET') {
-            if (req.url === '/api/health' || req.url === '/api/snapshot') {
+            const reads = ['/api/health', '/api/snapshot', '/api/candidates', '/api/pipeline/health'];
+            if (reads.includes(req.url)) {
               return respond(200, await api.handle(req.url, null, env));
             }
             return respond(404, { error: `unknown endpoint: ${req.url}` });
@@ -49,9 +50,13 @@ function pipelineApi(env: Record<string, string>): Plugin {
           return respond(200, await api.handle(req.url, body, env));
         } catch (err) {
           // Deliberately verbose: a silent 500 during a demo is the failure mode this repo argues against.
+          // `status` is duck-typed off the error because handlers.ts is loaded through Vite's module
+          // graph — its HttpError class is not the same object identity an import here would see.
           const message = err instanceof Error ? err.message : String(err);
+          const thrown = err as { status?: unknown };
+          const status = typeof thrown.status === 'number' ? thrown.status : 500;
           server.config.logger.error(`[api] ${req.url} failed: ${message}`);
-          return respond(500, { error: message });
+          return respond(status, { error: message });
         }
       });
     },

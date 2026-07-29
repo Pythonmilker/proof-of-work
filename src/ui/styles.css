@@ -886,3 +886,72 @@ tr.needs-review td {
 .mode {
   position: relative;
 }
+
+/* ── v3: the recruiter seat ────────────────────────────────────────────────────────────────────── */
+
+/* A claim with a receipt. The counterpart of .chip.unverified, and the pair is the whole product. */
+.chip.verified {
+  border-color: color-mix(in srgb, var(--proven) 45%, transparent);
+  color: var(--proven);
+}
+
+/* The applicant roster. Rows are buttons because selection is the action. */
+.applicant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.applicant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  color: var(--text);
+}
+.applicant:hover {
+  background: var(--bg-inset);
+}
+.applicant[aria-current='true'] {
+  background: var(--bg-inset);
+  border-color: var(--line);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.applicant .who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.applicant .who .mono {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.applicant .chips {
+  flex: none;
+}
+
+/* The source-name input beside the resume box. Same treatment as the textarea, one line tall. */
+input.text {
+  width: 100%;
+  margin-top: 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+input.text:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+input.text::placeholder {
+  color: var(--text-faint);
+}

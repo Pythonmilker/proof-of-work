@@ -115,10 +115,19 @@ function findCapability(capabilities: readonly Capability[], raw: string): Capab
 export function linkCapabilities(
   snapshot: Snapshot,
   claims: readonly string[],
+  candidateId: string = DEFAULT_CANDIDATE_ID,
 ): LinkOutcome<Capability> {
   const existing: string[] = [];
   const created: Capability[] = [];
   const pool = [...snapshot.capabilities];
+
+  // Ids for the seed candidate stay plain slugs (every existing row and test knows them). Any other
+  // candidate gets candidate-scoped ids — the same convention ingestResume uses, and for the same
+  // reason: two people making the same claim must never share a row.
+  const idFor = (raw: string) =>
+    candidateId === DEFAULT_CANDIDATE_ID
+      ? slugify(raw)
+      : `cap-${candidateId.replace(/^candidate-/, '')}-${slugify(raw).slice(0, 64)}`.replace(/-+$/, '');
 
   for (const raw of claims) {
     const hit = findCapability(pool, raw);
@@ -126,11 +135,12 @@ export function linkCapabilities(
       if (!existing.includes(hit.id)) existing.push(hit.id);
       continue;
     }
-    const id = slugify(raw);
+    if (!slugify(raw)) continue;
+    const id = idFor(raw);
     if (!id || existing.includes(id) || created.some((c) => c.id === id)) continue;
     const row: Capability = {
       id,
-      candidate: DEFAULT_CANDIDATE_ID,
+      candidate: candidateId,
       name: raw,
       statement: raw,
       tier: 'stretch',

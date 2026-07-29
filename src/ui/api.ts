@@ -1,8 +1,11 @@
 /**
  * One client, three possible backends, and the UI cannot tell them apart.
  *
- *   1. `VITE_PIPELINE_ENDPOINT` set  → an n8n webhook. This is the whole point of the workflows being
- *                                      real: swap one env var and the pipeline moves out of this repo.
+ *   1. `VITE_PIPELINE_ENDPOINT` set  → n8n runs the pipeline. The browser still only ever talks to
+ *                                      `/api/pipeline/*` on the dev server, which forwards to the
+ *                                      webhooks with the shared app token attached SERVER-SIDE. The
+ *                                      token never appears here, in any VITE_ variable, or in any
+ *                                      bundle — see DESIGN.md §v3.7.
  *   2. `/api/*` responds             → the Vite dev server, running the pipeline in Node with the key
  *                                      server-side.
  *   3. neither                       → the static build. The same pipeline module runs in the browser on
@@ -12,7 +15,14 @@
  * Which one is in use is reported, never inferred silently. The header says so.
  */
 
-import { ingest as runIngest, matchRole as runMatch, type IngestResult, type MatchReport } from '../pipeline';
+import {
+  ingest as runIngest,
+  ingestResume as runIngestResume,
+  matchRole as runMatch,
+  type IngestResult,
+  type MatchReport,
+  type ResumeIngestResult,
+} from '../pipeline';
 import { createBrowserStore } from '../store';
 import type { LocalStore } from '../store/local';
 import type { ModeReport } from '../store';
@@ -34,14 +44,15 @@ export interface Health {
 }
 
 /**
- * VITE_PIPELINE_ENDPOINT is the n8n BASE url (e.g. http://localhost:5678/webhook), not a full webhook
- * path. The two operations live at different paths, and the first version of this file posted both to
- * one endpoint — so n8n mode could never have worked. The paths are appended here, matching the
- * webhook nodes in n8n/build.ts exactly.
+ * VITE_PIPELINE_ENDPOINT here is a FLAG, not an address. Set, it means "prefer the n8n backend" — but
+ * every request still goes to `/api/pipeline/*` on the dev server, which holds the actual webhook URL
+ * and attaches the shared app token from its own environment. The browser fetching n8n directly is the
+ * thing v3.7 forbids: it would require the token in client-reachable code, and a token in a bundle is
+ * a token anyone has.
  */
-const N8N_BASE = (import.meta.env['VITE_PIPELINE_ENDPOINT'] as string | undefined)?.trim()?.replace(/\/+$/, '');
-const N8N_EXTRACT = N8N_BASE ? `${N8N_BASE}/proof-of-work/extract` : undefined;
-const N8N_MATCH = N8N_BASE ? `${N8N_BASE}/proof-of-work/match` : undefined;
+const N8N_CONFIGURED = Boolean((import.meta.env['VITE_PIPELINE_ENDPOINT'] as string | undefined)?.trim());
+const PROXY_EXTRACT = '/api/pipeline/extract';
+const PROXY_MATCH = '/api/pipeline/match';
 
 /** Where the delivered product lives. Read by the live-mode links, set in .env.local. */
 export const AIRTABLE_BASE_URL = (import.meta.env['VITE_AIRTABLE_BASE_URL'] as string | undefined)?.trim();
@@ -101,37 +112,43 @@ let resolved: Backend | null = null;
  * that tells them plainly it is running deterministic-only.
  */
 export async function health(): Promise<Health> {
-  if (N8N_BASE && N8N_MATCH) {
+  let n8nDown: string | null = null;
+
+  if (N8N_CONFIGURED) {
     /**
-     * PROBE, do not assume. The first version of this branch reported models/embeddings/airtable all
-     * "ready" without a single network call, and routed snapshot() to the bundled local store — so the
-     * UI would have rendered seed data while writes landed in Airtable. That is precisely the silent
-     * fallback this repo exists to argue against.
-     *
-     * Any HTTP response proves the webhook is reachable (n8n answers 404 on a GET to a POST-only
-     * webhook, which is still proof of life). A network error falls through to the server backend,
-     * and the header says so rather than pretending.
+     * PROBE, do not assume — and probe THROUGH THE PROXY. The server holds the webhook URL and the
+     * app token, so only the server can say whether n8n is genuinely usable; asking it also proves
+     * the one path requests will actually take. A dead proxy, an unreachable webhook, or a missing
+     * token each fall through to the server backend with the reason carried into the header label.
      */
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
-      await fetch(N8N_MATCH, { method: 'GET', signal: controller.signal });
-      clearTimeout(timer);
-      resolved = 'n8n';
-      return {
-        backend: 'n8n',
-        store: 'via n8n',
-        samples: bundledSamples(),
-        mode: {
-          store: 'airtable',
-          llm: { state: 'ready', detail: `Webhook reachable at ${N8N_BASE}` },
-          embeddings: { state: 'ready', detail: 'Handled inside the workflow' },
-          airtable: { state: 'ready', detail: 'Written by the workflow' },
-          label: 'live · n8n · Airtable',
-        },
+      const response = await fetch('/api/pipeline/health');
+      const payload = (await response.json()) as {
+        configured: boolean;
+        reachable: boolean;
+        tokenConfigured: boolean;
+        detail: string;
       };
+      if (response.ok && payload.configured && payload.reachable && payload.tokenConfigured) {
+        resolved = 'n8n';
+        return {
+          backend: 'n8n',
+          store: 'via n8n',
+          samples: bundledSamples(),
+          mode: {
+            store: 'airtable',
+            llm: { state: 'ready', detail: payload.detail },
+            embeddings: { state: 'ready', detail: 'Handled inside the workflow' },
+            airtable: { state: 'ready', detail: 'Written by the workflow' },
+            label: 'live · n8n · Airtable',
+          },
+        };
+      }
+      n8nDown = payload.detail || 'n8n is not usable';
     } catch {
-      // Fall through to the server backend, visibly: the label below names what happened.
+      // No dev server to proxy through. n8n mode NEEDS the server — the token lives there — so this
+      // falls through, and the static-build branch below names it.
+      n8nDown = 'n8n mode needs the dev server (the app token lives server-side)';
     }
   }
 
@@ -140,13 +157,13 @@ export async function health(): Promise<Health> {
     if (response.ok) {
       const payload = (await response.json()) as Omit<Health, 'backend'>;
       resolved = 'server';
-      if (N8N_BASE) {
-        // n8n was configured and did not answer. Same pipeline runs server-side against the same
+      if (n8nDown) {
+        // n8n was configured and is not usable. Same pipeline runs server-side against the same
         // store, but the degradation is stated, not smoothed over.
-        payload.mode.label = `${payload.mode.label} · n8n unreachable`;
+        payload.mode.label = `${payload.mode.label} · n8n unavailable`;
         payload.mode.llm = {
           ...payload.mode.llm,
-          detail: `n8n at ${N8N_BASE} did not respond; running the local pipeline. ${payload.mode.llm.detail}`,
+          detail: `${n8nDown}; running the local pipeline. ${payload.mode.llm.detail}`,
         };
       }
       return { ...payload, backend: 'server' };
@@ -162,7 +179,12 @@ export async function health(): Promise<Health> {
     samples: bundledSamples(),
     mode: {
       store: 'local',
-      llm: { state: 'absent', detail: 'Static build. No server to hold a key, so extraction is deterministic' },
+      llm: {
+        state: 'absent',
+        detail: n8nDown
+          ? `Static build — ${n8nDown}. Extraction is deterministic`
+          : 'Static build. No server to hold a key, so extraction is deterministic',
+      },
       embeddings: { state: 'absent', detail: 'Retrieval is lexical only' },
       airtable: { state: 'absent', detail: 'Using the bundled local store' },
       label: 'demo · local store · no key',
@@ -215,26 +237,97 @@ export type MatchOutcome =
   | { kind: 'full'; report: MatchReport }
   | { kind: 'live'; summary: LiveMatchSummary };
 
-export async function ingest(blob: string, sourceName: string): Promise<IngestOutcome> {
-  if (resolved === 'n8n' && N8N_EXTRACT) {
-    return { kind: 'live', summary: await post<LiveIngestSummary>(N8N_EXTRACT, { blob, sourceName }) };
+export async function ingest(blob: string, sourceName: string, candidateId?: string): Promise<IngestOutcome> {
+  if (resolved === 'n8n') {
+    // Through the proxy — the token is attached server-side. The workflow writes to the seed
+    // candidate's record; per-candidate routing inside n8n is not built, and saying so beats hiding it.
+    return { kind: 'live', summary: await post<LiveIngestSummary>(PROXY_EXTRACT, { blob, sourceName }) };
   }
   if (resolved === 'server') {
-    return { kind: 'full', result: await post<IngestResult>('/api/ingest', { blob, sourceName }) };
+    return { kind: 'full', result: await post<IngestResult>('/api/ingest', { blob, sourceName, candidateId }) };
   }
   // apiKey is deliberately undefined: a browser bundle is a public artifact, and a key in one is a key
   // anyone can read. The deterministic path is the honest option here, not a compromise.
-  return { kind: 'full', result: await runIngest(blob, sourceName, localStore(), { apiKey: undefined }) };
+  return {
+    kind: 'full',
+    result: await runIngest(blob, sourceName, localStore(), {
+      apiKey: undefined,
+      ...(candidateId ? { candidateId } : {}),
+    }),
+  };
 }
 
-export async function match(text: string): Promise<MatchOutcome> {
-  if (resolved === 'n8n' && N8N_MATCH) {
-    return { kind: 'live', summary: await post<LiveMatchSummary>(N8N_MATCH, { text }) };
+/**
+ * Resume intake. No n8n lane exists for this — the two committed workflows are extract and match — so
+ * in n8n mode this refuses with the reason named rather than quietly running against the local store
+ * while the header claims the record lives in Airtable.
+ */
+export async function ingestResume(text: string, sourceName: string): Promise<ResumeIngestResult> {
+  if (resolved === 'n8n') {
+    throw new Error('Resume intake is not one of the n8n workflows; run it against the dev server');
   }
   if (resolved === 'server') {
-    return { kind: 'full', report: await post<MatchReport>('/api/match', { text }) };
+    return await post<ResumeIngestResult>('/api/ingest-resume', { text, sourceName });
   }
-  return { kind: 'full', report: await runMatch(text, localStore(), { apiKey: undefined }) };
+  return await runIngestResume(text, sourceName, localStore(), { apiKey: undefined });
+}
+
+export async function match(text: string, candidateId?: string): Promise<MatchOutcome> {
+  if (resolved === 'n8n') {
+    // Through the proxy; the workflow scores the seed candidate's record in Airtable.
+    return { kind: 'live', summary: await post<LiveMatchSummary>(PROXY_MATCH, { text }) };
+  }
+  if (resolved === 'server') {
+    return { kind: 'full', report: await post<MatchReport>('/api/match', { text, candidateId }) };
+  }
+  return {
+    kind: 'full',
+    report: await runMatch(text, localStore(), {
+      apiKey: undefined,
+      ...(candidateId ? { candidateId } : {}),
+    }),
+  };
+}
+
+/** One row of the Applicants list. Claim counts are the verified/unverified chips. */
+export interface CandidateSummary {
+  id: string;
+  name: string;
+  contact: string;
+  source: string;
+  ingestedAt: string;
+  projects: number;
+  claims: { verified: number; unverified: number };
+}
+
+/**
+ * The applicant list. Null in n8n mode for the same reason snapshot() is null there: the record lives
+ * in Airtable, this app holds no credential to read it back, and the seed pretending to be live data
+ * is the exact lie the boundary audit caught.
+ */
+export async function candidates(): Promise<CandidateSummary[] | null> {
+  if (resolved === 'n8n') return null;
+  if (resolved === 'server') {
+    const response = await fetch('/api/candidates');
+    const payload = (await response.json()) as { candidates: CandidateSummary[] };
+    return payload.candidates;
+  }
+  const snap = await localStore().read();
+  return snap.candidates.map((c) => {
+    const claims = snap.capabilities.filter((cap) => cap.candidate === c.id);
+    return {
+      id: c.id,
+      name: c.name,
+      contact: c.contact,
+      source: c.source,
+      ingestedAt: c.ingestedAt,
+      projects: snap.projects.filter((p) => p.candidate === c.id && p.reviewStatus === 'ok').length,
+      claims: {
+        verified: claims.filter((cap) => cap.evidence.length > 0).length,
+        unverified: claims.filter((cap) => cap.evidence.length === 0).length,
+      },
+    };
+  });
 }
 
 /**
@@ -263,4 +356,4 @@ export async function reset(): Promise<{ ok: boolean; reason?: string }> {
   return { ok: true };
 }
 
-export type { IngestResult, MatchReport };
+export type { IngestResult, MatchReport, ResumeIngestResult };

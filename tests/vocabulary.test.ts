@@ -40,6 +40,9 @@ const BANNED: Array<{ pattern: RegExp; instead: string }> = [
   { pattern: />\s*(Resume|CV|Portfolio)\s*</, instead: 'Record / Evidence' },
   { pattern: /\bhire me\b/i, instead: 'coverage' },
   { pattern: /\bI (have|built|shipped|worked|am)\b/, instead: 'third person, or drop the sentence' },
+  // v3: the label that lied about the seat. The button scores the APPLICANT's fit against a posting;
+  // naming the role as the thing being scored reversed the direction and must not come back.
+  { pattern: /\bScore\s+this\s+role\b/i, instead: "Score {name}'s fit — the button names the direction" },
 ];
 
 describe('interface vocabulary', () => {
@@ -65,7 +68,7 @@ describe('interface vocabulary', () => {
 
   it('uses the domain vocabulary the product is built around', () => {
     const all = files.map((f) => readFileSync(f, 'utf8')).join('\n');
-    for (const word of ['Evidence', 'coverage', 'Requirements', 'record', 'Gaps']) {
+    for (const word of ['Evidence', 'coverage', 'Requirements', 'record', 'Gaps', 'Applicants', 'unverified']) {
       expect(all, `the interface never says "${word}"`).toContain(word);
     }
   });

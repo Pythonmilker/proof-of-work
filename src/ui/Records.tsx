@@ -1,8 +1,10 @@
 /**
  * The record browser — demo mode's copy of the tables Airtable holds.
  *
- * In live mode this screen refuses to render: the base is the record, and a local copy would be a
- * duplicate at best and, on the n8n path, the bundled seed masquerading as live data. Two things are called out visually because they are the schema's whole
+ * v3: no longer a tab. The footer's "browse the record" link lands here in demo mode, because the
+ * table view is a demo beat worth keeping; in live mode this screen refuses to render — the base is
+ * the record, and a local copy would be a duplicate at best and, on the n8n path, the bundled seed
+ * masquerading as live data. Two things are called out visually because they are the schema's whole
  * argument: a project parked in Needs Review, and a capability with nothing linked to it.
  */
 
@@ -10,9 +12,10 @@ import { useState } from 'react';
 import type { Snapshot } from '../store/types';
 import { AIRTABLE_BASE_URL, AIRTABLE_REPORT_URL } from './api';
 
-type Tab = 'projects' | 'technologies' | 'capabilities' | 'evidence' | 'roles';
+type Tab = 'candidates' | 'projects' | 'technologies' | 'capabilities' | 'evidence' | 'roles';
 
 const TABS: Array<{ id: Tab; label: string }> = [
+  { id: 'candidates', label: 'Candidates' },
   { id: 'projects', label: 'Projects' },
   { id: 'technologies', label: 'Technologies' },
   { id: 'capabilities', label: 'Capabilities' },
@@ -24,14 +27,14 @@ export function Records({ snapshot, live }: { snapshot: Snapshot | null; live: b
   const [tab, setTab] = useState<Tab>('projects');
 
   if (live) {
-    // The record IS the Airtable base in live mode, and this tab rendering its own copy is a duplicate
-    // at best — and in n8n mode a lie, since the only snapshot available here is the bundled seed.
+    // The record IS the Airtable base in live mode, and this screen rendering its own copy is a
+    // duplicate at best — and in n8n mode a lie, since the only snapshot available here is the seed.
     return (
       <>
         <h1>The record lives in Airtable</h1>
         <p className="lede">
-          Six tables, the recruiter views, and the fit-report Interface are the delivered product. This
-          app writes to them; it does not keep a second copy.
+          Seven tables, the recruiter views, and the fit-report Interface are the delivered product.
+          This app writes to them; it does not keep a second copy.
         </p>
         <div className="actions">
           {AIRTABLE_BASE_URL ? (
@@ -63,9 +66,10 @@ export function Records({ snapshot, live }: { snapshot: Snapshot | null; live: b
     <>
       <h1>The record</h1>
       <p className="lede">
-        Six tables. Projects hold the work, Technologies and Capabilities describe it, Evidence proves
-        it, Roles hold every posting scored against it, and Results hold each posting&rsquo;s verdicts. In
-        Airtable these are the same six tables with recruiter views over them.
+        Seven tables. Candidates own their records, Projects hold the work, Technologies and
+        Capabilities describe it, Evidence proves it, Roles hold every posting, and Results hold each
+        posting&rsquo;s verdicts per applicant. In Airtable these are the same seven tables with
+        recruiter views over them.
       </p>
 
       {parked > 0 ? (
@@ -93,6 +97,45 @@ export function Records({ snapshot, live }: { snapshot: Snapshot | null; live: b
       </div>
 
       <div className="card table-wrap">
+        {tab === 'candidates' ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Source</th>
+                <th>Ingested</th>
+                <th>Projects</th>
+                <th>Claims</th>
+                <th>Unverified</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshot.candidates.map((c) => {
+                const claims = snapshot.capabilities.filter((cap) => cap.candidate === c.id);
+                const unverified = claims.filter((cap) => cap.evidence.length === 0).length;
+                return (
+                  <tr key={c.id}>
+                    <td>
+                      <b>{c.name}</b>
+                    </td>
+                    <td className="mono">{c.contact || '—'}</td>
+                    <td className="mono">{c.source}</td>
+                    <td className="mono">{c.ingestedAt.slice(0, 10)}</td>
+                    <td className="mono num">
+                      {snapshot.projects.filter((p) => p.candidate === c.id && p.reviewStatus === 'ok').length}
+                    </td>
+                    <td className="mono num">{claims.length}</td>
+                    <td className="mono num">
+                      {unverified > 0 ? <span style={{ color: 'var(--partial)' }}>{unverified}</span> : 0}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : null}
+
         {tab === 'projects' ? (
           <table>
             <thead>

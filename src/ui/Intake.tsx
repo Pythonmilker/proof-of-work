@@ -1,7 +1,11 @@
 /**
- * Stage 1, and the before/after that shows what the pipeline did to the input.
+ * The supporting-documents slot, and the before/after that shows what the pipeline did to the input.
  *
- * Two corrections live in this file.
+ * v3: this is no longer its own tab. It sits under the Applicants roster and everything it writes is
+ * stamped with the SELECTED applicant — the artifact lands on their record, and any receipts it
+ * carries attach to the claims it matches, which is how an unverified chip earns its promotion.
+ *
+ * Two older corrections still live here.
  *
  * **The failure branch no longer renders a success panel.** `IngestResult.ok` was computed and never
  * read, so a rejected extraction printed "AFTER — STRUCTURED RECORD" with fields populated from the very
@@ -9,8 +13,8 @@
  * screen built to prove the pipeline does not fail quietly was a picture of it failing quietly.
  *
  * **The source-type radio group is gone.** Seven options, never passed to `ingest()`, never read by the
- * pipeline, occupying the tallest slot in the sidebar of the landing screen. A control that does nothing
- * teaches a false model of the product, and in a job-application demo it reads as unfinished.
+ * pipeline. A control that does nothing teaches a false model of the product, and in a job-application
+ * demo it reads as unfinished.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -22,7 +26,14 @@ const STAGE_ORDER = ['extract', 'validate', 'dedup', 'link', 'write'] as const;
 
 const MARK: Record<string, string> = { ok: '✓', failed: '✕', skipped: '–', running: '·' };
 
-function StageList({ result, running }: { result: IngestResult | null; running: boolean }) {
+/** Shared with the resume intake on the Applicants screen — both pipelines report the same stages. */
+export function StageList({
+  result,
+  running,
+}: {
+  result: Pick<IngestResult, 'stages'> | null;
+  running: boolean;
+}) {
   return (
     <ul className="stages">
       {STAGE_ORDER.map((stage) => {
@@ -173,6 +184,8 @@ export function Intake({
   samples,
   snapshot,
   live,
+  candidateId,
+  candidateName,
   state,
   onState,
   onChanged,
@@ -180,6 +193,8 @@ export function Intake({
   samples: SampleFile[];
   snapshot: Snapshot | null;
   live: boolean;
+  candidateId: string;
+  candidateName: string;
   state: IntakeState;
   onState: (next: IntakeState) => void;
   onChanged: () => void;
@@ -194,14 +209,20 @@ export function Intake({
   const result: IngestResult | null = outcome?.kind === 'full' ? outcome.result : null;
   const patch = (next: Partial<IntakeState>) => onState({ ...latest.current, ...next });
 
-  const parked = snapshot?.projects.filter((p) => p.reviewStatus === 'needs-review').length ?? 0;
+  // Scoped to the selected applicant — this slot writes to one person's record, so counting anyone
+  // else's rows here would show numbers the ingest cannot have changed. Technologies stay global.
+  const own = {
+    projects: snapshot?.projects.filter((p) => p.candidate === candidateId) ?? [],
+    capabilities: snapshot?.capabilities.filter((c) => c.candidate === candidateId) ?? [],
+    evidence: snapshot?.evidence.filter((e) => e.candidate === candidateId) ?? [],
+  };
   const counts = {
-    projects: snapshot?.projects.filter((p) => p.reviewStatus === 'ok').length ?? 0,
+    projects: own.projects.filter((p) => p.reviewStatus === 'ok').length,
     technologies: snapshot?.technologies.length ?? 0,
-    capabilities: snapshot?.capabilities.length ?? 0,
-    evidence: snapshot?.evidence.length ?? 0,
-    unverified: snapshot?.capabilities.filter((c) => c.evidence.length === 0).length ?? 0,
-    review: parked,
+    capabilities: own.capabilities.length,
+    evidence: own.evidence.length,
+    unverified: own.capabilities.filter((c) => c.evidence.length === 0).length,
+    review: own.projects.filter((p) => p.reviewStatus === 'needs-review').length,
   };
 
   async function pickSample(name: string) {
@@ -219,7 +240,7 @@ export function Intake({
     setError(null);
     patch({ outcome: null, ingestedBlob: blob });
     try {
-      const next = await ingest(blob, sourceName);
+      const next = await ingest(blob, sourceName, candidateId);
       patch({ outcome: next, ingestedBlob: blob });
       onChanged();
     } catch (err) {
@@ -246,11 +267,12 @@ export function Intake({
 
   return (
     <>
-      <h1>Add evidence to the record</h1>
+      <h2>Add supporting documents</h2>
       <p className="lede">
-        Paste any artifact from a piece of work. Extraction reads it, validation checks every field, and
-        what survives becomes a record with receipts attached. What does not survive is parked for review
-        rather than dropped.
+        Paste any artifact from {candidateName}&rsquo;s work — a README, a package manifest, raw test
+        output. Extraction reads it, validation checks every field, and what survives lands on their
+        record with receipts attached; claims the artifact matches earn those receipts. What does not
+        survive is parked for review rather than dropped.
       </p>
 
       {error ? <div className="notice bad">{error}</div> : null}
@@ -298,7 +320,7 @@ export function Intake({
           </div>
 
           <p className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
-            The record, right now
+            {candidateName}&rsquo;s record, right now
           </p>
           {!snapshot && live ? (
             // n8n mode: the record lives in Airtable and this app holds no credential to read it back.
@@ -365,8 +387,8 @@ export function Intake({
               </button>
             ))}
             <p className="hint" style={{ marginBottom: 0, marginTop: 10 }}>
-              <b>10-genestrata</b> is new to the record. <b>01-tendril</b> is already in it, so dedup
-              fires. <b>11-broken-fragment</b> fails validation on purpose.
+              For the seeded applicant: <b>10-genestrata</b> is new to the record, <b>01-tendril</b> is
+              already in it so dedup fires, and <b>11-broken-fragment</b> fails validation on purpose.
             </p>
           </div>
         </div>

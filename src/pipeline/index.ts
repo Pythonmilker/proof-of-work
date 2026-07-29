@@ -68,6 +68,11 @@ export interface PipelineOptions extends LlmOptions {
   now?: () => string;
 }
 
+export interface IngestOptions extends PipelineOptions {
+  /** Whose record this artifact supports. Defaults to the seed candidate, keeping every existing caller intact. */
+  candidateId?: string;
+}
+
 function nowIso(opts: PipelineOptions): string {
   return opts.now ? opts.now() : new Date().toISOString();
 }
@@ -80,9 +85,22 @@ export async function ingest(
   blob: string,
   sourceName: string,
   store: Store,
-  opts: PipelineOptions,
+  opts: IngestOptions,
 ): Promise<IngestResult> {
-  const snapshot = await store.read();
+  const full = await store.read();
+  const candidateId = opts.candidateId ?? DEFAULT_CANDIDATE_ID;
+
+  // Scope before anything reads the snapshot, the same guarantee matchRole makes: dedup, capability
+  // linking and extraction context only ever see this candidate's rows, so a supporting document can
+  // never merge into another person's project or attach receipts to another person's claim.
+  // Technologies stay global — React is React for everyone.
+  const snapshot: Snapshot = {
+    ...full,
+    projects: full.projects.filter((p) => p.candidate === candidateId),
+    capabilities: full.capabilities.filter((c) => c.candidate === candidateId),
+    evidence: full.evidence.filter((e) => e.candidate === candidateId),
+  };
+
   const ingestedAt = nowIso(opts);
   const stages: StageReport[] = [];
 
@@ -99,7 +117,7 @@ export async function ingest(
   const validation = validateExtraction(extraction.raw);
   if (!validation.ok) {
     // The error branch. A rejection becomes a visible row, not a log line — see DESIGN.md §5.3.
-    const stub = toReviewStub(sourceName, validation.problems, { source: sourceName, ingestedAt });
+    const stub = { ...toReviewStub(sourceName, validation.problems, { source: sourceName, ingestedAt }), candidate: candidateId };
     await store.upsertProject(stub);
     stages.push({
       stage: 'validate',
@@ -139,7 +157,7 @@ export async function ingest(
   });
 
   const techLink = linkTechnologies(snapshot, validation.value.stack);
-  const capLink = linkCapabilities(snapshot, validation.value.capabilities);
+  const capLink = linkCapabilities(snapshot, validation.value.capabilities, candidateId);
   stages.push({
     stage: 'link',
     state: 'ok',
@@ -151,6 +169,11 @@ export async function ingest(
   });
 
   let project = toProject(validation.value, { source: sourceName, ingestedAt });
+  project.candidate = candidateId;
+  // Project ids for the seed candidate stay plain slugs (the seed and every test know them); any other
+  // candidate's ids are candidate-scoped — the convention ingestResume set, so a supporting artifact
+  // dedups into its resume stub and two people's "Tendril" rows never overwrite each other.
+  if (candidateId !== DEFAULT_CANDIDATE_ID) project.id = `${candidateId}-${project.slug}`;
   project.technologies = techLink.existing;
   project.capabilities = capLink.existing;
 
@@ -159,9 +182,13 @@ export async function ingest(
   for (const t of techLink.created) await store.upsertTechnology(t);
   for (const c of capLink.created) await store.upsertCapability(c);
 
+  const evidenceScope =
+    candidateId === DEFAULT_CANDIDATE_ID
+      ? project.slug
+      : `${candidateId.replace(/^candidate-/, '')}-${project.slug}`;
   const createdEvidence: Evidence[] = validation.value.evidence.map((e) => ({
-    id: evidenceId(project.slug, e.label, e.value),
-    candidate: DEFAULT_CANDIDATE_ID,
+    id: evidenceId(evidenceScope, e.label, e.value),
+    candidate: candidateId,
     label: e.label,
     kind: e.kind as Evidence['kind'],
     value: e.value,
@@ -179,6 +206,26 @@ export async function ingest(
   await store.upsertProject(project);
   await store.linkTechnologies(project.id, project.technologies);
   await store.linkCapabilities(project.id, project.capabilities);
+
+  // The promotion path (DESIGN.md §v3.3): this artifact's receipts attach to the claims it matched.
+  // A capability that arrived from a resume with an empty evidence array stops being unverified the
+  // moment a supporting document making the same claim lands with something checkable in it.
+  //
+  // Only claims that existed BEFORE this ingest are promoted. A capability this document itself
+  // invented gets nothing — its own source vouching for its own assertion is not verification, and
+  // "created by ingest starts unverified" is the point of the evidence gate.
+  if (createdEvidence.length > 0) {
+    const evidenceIds = createdEvidence.map((e) => e.id);
+    for (const capId of capLink.existing) {
+      const cap = snapshot.capabilities.find((c) => c.id === capId);
+      if (!cap) continue; // created this run — stays unverified.
+      await store.upsertCapability({
+        ...cap,
+        projects: [...new Set([...cap.projects, project.id])],
+        evidence: [...new Set([...cap.evidence, ...evidenceIds])],
+      });
+    }
+  }
 
   stages.push({
     stage: 'write',

@@ -9,8 +9,8 @@
  * or the dedup branch fires where a shot expects a fresh record. The three shots that need live n8n and
  * Airtable accounts are described in docs/SHOTLIST.md.
  *
- * Shot order follows the reviewer's path, not the pipeline's: the fit report first, because that is what
- * the app now opens on and what a hiring manager should see in the first frame.
+ * Shot order follows the reviewer's path, not the pipeline's: the Applicants landing first — the
+ * recruiter seat is the product — then the scored report a click later.
  */
 
 import { mkdirSync } from 'node:fs';
@@ -49,11 +49,13 @@ async function main(): Promise<void> {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await settle(page);
 
-  // ── 1. The landing screen: the product sentence and a pre-filled posting ────────────────────────
+  // ── 1. The landing screen: the applicant roster and the product sentence ────────────────────────
   await shoot(page, '01-landing');
 
   // ── 2. The scored report, first citation panel already open ─────────────────────────────────────
-  await page.getByRole('button', { name: 'Score this role' }).click();
+  await page.getByRole('button', { name: 'Score', exact: true }).click();
+  await settle(page, 300);
+  await page.getByRole('button', { name: /Score .*fit/ }).click();
   await page.waitForSelector('text=what this record does not cover', { timeout: 120_000 });
   await settle(page, 600);
   await shoot(page, '02-fit-report');
@@ -66,9 +68,11 @@ async function main(): Promise<void> {
   await page.screenshot({ path: join(OUT, '04-fit-report-tall.png'), fullPage: true });
   console.log('  wrote docs/screenshots/04-fit-report-tall.png');
 
-  // ── 4. Intake, before anything has been ingested ────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'Add evidence', exact: true }).click();
+  // ── 4. Supporting documents, before anything has been ingested ──────────────────────────────────
+  await page.getByRole('button', { name: 'Applicants', exact: true }).click();
   await settle(page, 300);
+  await page.getByText('Add supporting documents').scrollIntoViewIfNeeded();
+  await settle(page, 250);
   await shoot(page, '05-intake');
 
   // ── 5. Before and after, from a real README ─────────────────────────────────────────────────────
@@ -89,8 +93,8 @@ async function main(): Promise<void> {
   await settle(page);
   await shoot(page, '07-needs-review');
 
-  // ── 7. The record browser ───────────────────────────────────────────────────────────────────────
-  await page.getByRole('button', { name: 'The record', exact: true }).click();
+  // ── 7. The record browser, now reached from the footer link rather than a tab ───────────────────
+  await page.getByRole('button', { name: /browse the record/ }).click();
   await settle(page, 400);
   await shoot(page, '08-record-projects');
 

@@ -1,17 +1,19 @@
 /**
  * The screen everything else is built backward from.
  *
- * Paste a posting, click one button, get a score where every claim links to something checkable — and a
- * Gaps section that says what is missing. The Gaps section is not a disclaimer and it is not collapsed
- * by default: it is the load-bearing claim, because a scoring system that only reports its hits is a
- * flattery generator and a reader can tell.
+ * One applicant's fit against one posting: a score where every claim links to something checkable —
+ * and a Gaps section that says what is missing. The Gaps section is not a disclaimer and it is not
+ * collapsed by default: it is the load-bearing claim, because a scoring system that only reports its
+ * hits is a flattery generator and a reader can tell.
+ *
+ * v3: the run happens on the Score screen. This screen only renders what a run produced, headed by
+ * the applicant it describes — the report is candidate-scoped and says so.
  */
 
 import { useState } from 'react';
 import type { CoverageStatus, Requirement, Snapshot } from '../store/types';
 import type { MatchState } from './App';
-import { AIRTABLE_BASE_URL, AIRTABLE_REPORT_URL, match, type MatchReport } from './api';
-import { SAMPLE_POSTING, SAMPLE_POSTING_LABEL } from './sample-posting';
+import { AIRTABLE_BASE_URL, AIRTABLE_REPORT_URL, type MatchReport } from './api';
 
 const MARKER: Record<CoverageStatus, string> = { proven: '●', partial: '◐', gap: '○' };
 
@@ -150,6 +152,7 @@ function LiveConfirmation({
   partial,
   gap,
   title,
+  candidateName,
   gapLines,
   onAgain,
 }: {
@@ -158,11 +161,13 @@ function LiveConfirmation({
   partial: number;
   gap: number;
   title: string;
+  candidateName: string;
   gapLines: string[];
   onAgain: () => void;
 }) {
   return (
     <div className="card">
+      <p className="section-label">Applicant — {candidateName}</p>
       <h1 style={{ marginBottom: 2 }}>Written to the base</h1>
       <p className="mono" style={{ color: 'var(--text-faint)', marginTop: 0 }}>
         {title} · one Roles row and {proven + partial + gap} Results rows, citations as links
@@ -202,7 +207,7 @@ function LiveConfirmation({
           </a>
         ) : null}
         <button className="btn ghost" onClick={onAgain}>
-          Score another role
+          Score another posting
         </button>
       </div>
     </div>
@@ -214,34 +219,25 @@ export function FitReport({
   live,
   state,
   onState,
-  onChanged,
+  candidateName,
+  onBack,
 }: {
   snapshot: Snapshot | null;
   live: boolean;
   state: MatchState;
   onState: (next: MatchState) => void;
-  onChanged: () => void;
+  /** Whose fit the outcome describes — the report is candidate-scoped and the header says so. */
+  candidateName: string;
+  /** Back to the Score screen, where runs happen. */
+  onBack: () => void;
 }) {
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { text, outcome, loadedFromRole } = state;
+  const { outcome } = state;
   const report = outcome?.kind === 'full' ? outcome.report : null;
 
-  async function run() {
-    if (!text.trim() || running) return;
-    setRunning(true);
-    setError(null);
-    try {
-      onState({ text, outcome: await match(text), loadedFromRole });
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  const clear = (nextText: string) => onState({ text: nextText, outcome: null, loadedFromRole: null });
+  const again = () => {
+    onState({ ...state, outcome: null });
+    onBack();
+  };
 
   // Live outcomes end on the confirmation card, whichever backend produced them.
   if (outcome?.kind === 'live' && outcome.summary.ok) {
@@ -253,8 +249,9 @@ export function FitReport({
         partial={s.coverage?.partial ?? 0}
         gap={s.coverage?.gap ?? 0}
         title={`${s.role ?? 'Role'}${s.company ? ` at ${s.company}` : ''}`}
+        candidateName={candidateName}
         gapLines={(s.gaps ?? []).filter((g) => g.status !== 'partial').map((g) => g.requirement.text).slice(0, 4)}
-        onAgain={() => clear(text)}
+        onAgain={again}
       />
     );
   }
@@ -266,8 +263,9 @@ export function FitReport({
         partial={report.coverage.partial}
         gap={report.coverage.gap}
         title={`${report.role.title}${report.role.company ? ` at ${report.role.company}` : ''}`}
+        candidateName={candidateName}
         gapLines={report.gaps.filter((g) => g.status === 'gap').map((g) => g.requirement.text).slice(0, 4)}
-        onAgain={() => clear(text)}
+        onAgain={again}
       />
     );
   }
@@ -275,38 +273,15 @@ export function FitReport({
   if (!report) {
     return (
       <>
-        <h1>Score a role</h1>
+        <h1>Fit report</h1>
         <p className="lede">
-          Paste a job description. Requirements are parsed out of it, matched against the record in code,
-          and scored in code. A language model writes one sentence per requirement from the records that
-          matched — it never sees the store, so it cannot cite anything retrieval did not return.
+          Nothing scored yet. Pick an applicant and a posting on the Score screen; the report lands
+          here, scoped to that applicant, with citations and a Gaps section.
         </p>
-
-        {error ? <div className="notice bad">{error}</div> : null}
-
-        <div className="card">
-          <textarea
-            value={text}
-            onChange={(e) => onState({ text: e.target.value, outcome: null, loadedFromRole: null })}
-            spellCheck={false}
-            aria-label="Job description"
-            style={{ minHeight: 340 }}
-          />
-          <div className="actions">
-            <button className="btn" onClick={run} disabled={!text.trim() || running}>
-              {running ? 'Scoring…' : 'Score this role'}
-            </button>
-            <button className="btn ghost" onClick={() => clear(SAMPLE_POSTING)} disabled={running}>
-              Reset to sample
-            </button>
-            <button className="btn ghost" onClick={() => clear('')} disabled={running}>
-              Clear
-            </button>
-          </div>
-          <p className="mono" style={{ color: 'var(--text-faint)', marginBottom: 0, marginTop: 12 }}>
-            Loaded: {SAMPLE_POSTING_LABEL}. The requirement list is real; the company copy is assembled
-            from the public site. Paste the actual posting over it for a real run.
-          </p>
+        <div className="actions">
+          <button className="btn" onClick={onBack}>
+            Go to Score
+          </button>
         </div>
       </>
     );
@@ -319,6 +294,7 @@ export function FitReport({
   return (
     <>
       <div className="card">
+        <p className="section-label">Applicant — {candidateName}</p>
         <div className="report-head">
           <div style={{ minWidth: 280, flex: 1 }}>
             <h1 style={{ marginBottom: 2 }}>{role.title}</h1>
@@ -428,8 +404,8 @@ export function FitReport({
       </section>
 
       <div className="actions" style={{ marginTop: 20 }}>
-        <button className="btn ghost" onClick={() => clear(text)}>
-          Score another role
+        <button className="btn ghost" onClick={again}>
+          Score another posting
         </button>
         <span className="mono" style={{ color: 'var(--text-faint)' }}>
           scoring: pure code · rationales: {report.rationaleVia} · retrieval: {report.retrieval} ·
