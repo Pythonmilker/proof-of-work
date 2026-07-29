@@ -122,13 +122,20 @@ async function main(): Promise<void> {
   console.log(`Pushing to base ${BASE_ID}`);
 
   console.log('\nReading what is already there…');
-  for (const table of ['Projects', 'Technologies', 'Capabilities', 'Evidence', 'Roles']) {
+  for (const table of ['Candidates', 'Projects', 'Technologies', 'Capabilities', 'Evidence', 'Roles']) {
     await loadExisting(table);
   }
   console.log(`  ${recordByKey.size} existing row(s)`);
 
   // Pass 1 — every row, no links. Links reference record ids that do not exist until this finishes.
   console.log('\nPass 1: rows');
+  await writeRows(
+    'Candidates',
+    snapshot.candidates.map((c) => ({
+      key: c.id,
+      fields: { Name: c.name, Contact: c.contact, Source: c.source, 'Ingested At': c.ingestedAt },
+    })),
+  );
   await writeRows(
     'Technologies',
     snapshot.technologies.map((t) => ({
@@ -180,6 +187,7 @@ async function main(): Promise<void> {
     snapshot.projects.map((p) => ({
       key: p.id,
       fields: {
+        Candidate: refs([p.candidate]),
         Technologies: refs(p.technologies),
         Capabilities: refs(p.capabilities),
         Evidence: refs(p.evidence),
@@ -188,7 +196,14 @@ async function main(): Promise<void> {
   );
   await writeRows(
     'Capabilities',
-    snapshot.capabilities.map((c) => ({ key: c.id, fields: { Evidence: refs(c.evidence) } })),
+    snapshot.capabilities.map((c) => ({
+      key: c.id,
+      fields: { Candidate: refs([c.candidate]), Evidence: refs(c.evidence) },
+    })),
+  );
+  await writeRows(
+    'Evidence',
+    snapshot.evidence.map((e) => ({ key: e.id, fields: { Candidate: refs([e.candidate]) } })),
   );
 
   // Pass 3 — remove rows the seed no longer has. Opt-in, because a base is a place people add things by
@@ -227,7 +242,10 @@ async function main(): Promise<void> {
         !snapshot.technologies.some((t) => t.id === k) &&
         !snapshot.capabilities.some((c) => c.id === k) &&
         !snapshot.evidence.some((e) => e.id === k) &&
-        !k.startsWith('role-'),
+        !snapshot.candidates.some((c) => c.id === k) &&
+        !k.startsWith('role-') &&
+        // Live-ingested applicants are data, not drift; they are never the seed's to prune.
+        !k.startsWith('candidate-'),
     );
     if (orphans.length > 0) {
       console.log(`\n${orphans.length} row(s) in the base are not in the seed: ${orphans.join(', ')}`);

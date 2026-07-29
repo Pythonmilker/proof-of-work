@@ -84,12 +84,35 @@ async function tablesIn(baseId: string): Promise<AirtableTable[]> {
   return tables;
 }
 
+/**
+ * A table added to the schema after the base exists — Candidates was the first — is created here.
+ * Same shape as creation-time tables: no link fields, those come in the link pass once the table id
+ * exists on both sides.
+ */
+async function createMissingTable(baseId: string, spec: (typeof TABLES)[number]): Promise<void> {
+  await call(`/bases/${baseId}/tables`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: spec.name,
+      description: spec.description,
+      fields: spec.fields.map((f) => ({
+        name: f.name,
+        type: f.type,
+        ...(f.description ? { description: f.description } : {}),
+        ...(f.options ? { options: f.options } : {}),
+      })),
+    }),
+  });
+  console.log(`  + table ${spec.name} (${spec.fields.length} fields)`);
+}
+
 async function addMissingFields(baseId: string, tables: AirtableTable[]): Promise<number> {
   let added = 0;
   for (const spec of TABLES) {
     const table = tables.find((t) => t.name === spec.name);
     if (!table) {
-      console.warn(`! table "${spec.name}" is missing from the base and cannot be added after creation`);
+      // Created by the caller before this pass; reaching here means that creation failed loudly.
+      console.warn(`! table "${spec.name}" is still missing from the base`);
       continue;
     }
     for (const field of spec.fields) {
@@ -184,7 +207,10 @@ async function main(): Promise<void> {
   }
 
   // Re-read after creation: the link pass needs real table ids, and an existing base may have drifted.
-  const tables = await tablesIn(baseId);
+  let tables = await tablesIn(baseId);
+  const missing = TABLES.filter((spec) => !tables.some((t) => t.name === spec.name));
+  for (const spec of missing) await createMissingTable(baseId, spec);
+  if (missing.length > 0) tables = await tablesIn(baseId);
   const fieldsAdded = await addMissingFields(baseId, tables);
   const linksAdded = await addLinks(baseId, await tablesIn(baseId));
 

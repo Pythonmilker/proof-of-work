@@ -405,19 +405,14 @@ const capabilities: Capability[] = [
     projects: ['viral-host-digital'],
     evidence: ['ev-vhd-codebuild'],
   },
-  {
-    id: 'cap-brownfield',
-    name: 'Working in an existing team codebase',
-    statement: 'No record. Every project on file is greenfield and solo.',
-    tier: 'stretch',
-    candidate: DEFAULT_CANDIDATE_ID,
-    matchTerms: ['existing codebase', 'legacy code', 'brownfield', 'code review', 'pair programming', 'team collaboration', 'agile', 'scrum', 'cross-functional'],
-    projects: [],
-    // Deliberately empty. This is what an unverified capability looks like in the views, and it is the
-    // clearest single demonstration that the evidence gate is real rather than decorative.
-    evidence: [],
-  },
 ];
+
+// cap-brownfield used to live here: an evidence-less "Working in an existing team codebase" row kept
+// deliberately so the gate had a visible example. v3 flipped the semantics out from under it — a
+// capability is now a claim the applicant made, and an unverified row on the seeded applicant renders
+// as a claim Joel never made, caught failing verification. Joel spotted it in the Applicants view.
+// The gate's visible example now comes from the resume intake path, where every claim is born
+// unverified honestly. The seeded record makes no claim it cannot back; a test now pins that.
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
  * Projects

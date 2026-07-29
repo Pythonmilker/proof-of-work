@@ -198,10 +198,13 @@ describe('referential integrity', () => {
     expect([...joel.evidence].sort()).toEqual(snapshot.evidence.map((e) => e.id).sort());
   });
 
-  it('keeps at least one capability with no evidence, so the gate stays visible', () => {
-    // Not a bug being tolerated. An unverified row is what the evidence gate looks like in the views,
-    // and removing the last one would make the rule invisible to anyone reading the screenshots.
-    expect(snapshot.capabilities.some((c) => c.evidence.length === 0)).toBe(true);
+  it('makes no claim it cannot back — every seeded capability carries evidence', () => {
+    // This assertion used to be the inverse: one evidence-less row was kept so the gate had a visible
+    // example. v3 changed what a capability IS — a claim the applicant made — so an unverified row on
+    // the seeded applicant read as a claim caught failing verification, about something Joel never
+    // claimed. The gate's visible example now comes from resume intake, where claims are born
+    // unverified honestly (tests/resume.test.ts). The seeded record itself must be fully receipted.
+    expect(snapshot.capabilities.some((c) => c.evidence.length === 0)).toBe(false);
   });
 
   it('marks Airtable and n8n as stretch, with this project as their only evidence', () => {
