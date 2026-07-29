@@ -36,17 +36,26 @@ fields, which embeds a real list whose fields, sort and filter are configurable.
      only). No footnote: the fraction above it is the explanation, and the word "weighted" must not
      appear anywhere on the page.
 3. **Name and date, field-driven** (hand-typed page furniture goes stale; fields recompute on every
-   scoring run). In the **Data** tab, on **Roles**, add two Formula fields:
+   scoring run). In the **Data** tab, on **Roles**, add two fields:
 
-   - `Candidate` — the formula is just the constant `"Joel Brannan"` — so every scored posting
-     carries the name, including ones scored later on camera.
-   - `Scored On`:
+   - `Applicant` — type **Rollup**: linked field `Results`, field to roll up `Candidate`,
+     aggregation:
+
+     ```
+     ARRAYJOIN(ARRAYUNIQUE(values), ", ")
+     ```
+
+     v3 note: this replaced an earlier constant-formula plan (`"Joel Brannan"`). The base is
+     multi-candidate now and Roles are global, so the name flows from the Results rows' Candidate
+     links — and if two applicants ever score the same posting, the field says so instead of lying.
+     If a constant `Candidate` field from the earlier script exists, delete it in favour of this.
+   - `Scored On` — type **Formula**:
 
      ```
      DATETIME_FORMAT(DATETIME_PARSE({Matched At}), 'D MMM YYYY')
      ```
 
-   The page name stays plain `Fit report`; with `Candidate` on the record, a name in the page title
+   The page name stays plain `Fit report`; with `Applicant` on the record, a name in the page title
    would print it twice.
 4. **Requirement list**
    - Click `Results` → properties → **Appearance → Show as → View**, style **List**.
