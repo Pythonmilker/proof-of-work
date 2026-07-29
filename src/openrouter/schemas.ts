@@ -133,6 +133,50 @@ export const ROLE_PARSE_SCHEMA = {
 } as const;
 
 /**
+ * What resume parsing pulls out of a pasted resume. (DESIGN.md §v3.3)
+ *
+ * Identity plus claims, and nothing that implies verification: skills and experience statements arrive
+ * as assertions, and the evidence gate downstream is what decides how far an assertion travels. The
+ * model is never asked whether a claim is credible — only what the resume actually says.
+ */
+export const RESUME_PARSE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['name', 'contact', 'skills', 'projects', 'claims'],
+  properties: {
+    name: { type: 'string', description: 'The name as the resume header writes it. Empty string if none is stated.' },
+    contact: {
+      type: 'string',
+      description: 'Email, phone and links from the header, joined with " · ". Empty string if none.',
+    },
+    skills: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Named skills and technologies, one per entry. Only ones the resume actually names.',
+    },
+    projects: {
+      type: 'array',
+      description: 'One entry per position or named project in the experience sections.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name', 'role', 'summary'],
+        properties: {
+          name: { type: 'string', description: 'Employer, product or project name.' },
+          role: { type: 'string', description: 'The title held there. Empty string if unstated.' },
+          summary: { type: 'string', description: 'One line, in the words the resume uses. No added adjectives.' },
+        },
+      },
+    },
+    claims: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Experience statements, one per entry, kept close to the wording on the page. These are unverified claims, not facts.',
+    },
+  },
+} as const;
+
+/**
  * What the rationale model returns. One field, because one field is all it is trusted with.
  *
  * The score is already computed before this call is made. The model is being handed a decision and asked
