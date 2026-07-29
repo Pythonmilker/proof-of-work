@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MAX_CHAIN_MODELS } from '@/openrouter/protocol';
 import { THRESHOLD_PARTIAL, THRESHOLD_PROVEN } from '@/pipeline/score';
+import { DEFAULT_CANDIDATE_ID } from '@/store/types';
 import { WORKFLOWS } from '../n8n/build';
 
 interface Node {
@@ -379,5 +380,94 @@ describe('the webhook auth guard', () => {
       expect(String(unauthorized?.parameters['responseBody']), file).toContain('unauthorized');
       expect(String(unauthorized?.parameters['responseBody']), file).toContain('authDetail');
     }
+  });
+});
+
+/**
+ * Candidate resolution (docs/DESIGN.md §v3.2).
+ *
+ * The workflows write the same shapes as src/store/airtable.ts: every created Projects, Evidence and
+ * Results row carries its Candidate link, and Results keys are candidate × role × requirement. Same
+ * anti-silent-skip shape as the guard tests above — each workflow must CONTRIBUTE assertions, because
+ * a filter that matches no node reads green while the thing it names goes unchecked.
+ */
+describe('candidate resolution', () => {
+  it('loads the Candidates table in both workflows', () => {
+    for (const { file, wf } of both) {
+      const loads = wf.nodes.filter(
+        (n) => n.type === 'n8n-nodes-base.airtable' && JSON.stringify(n.parameters).includes('"Candidates"'),
+      );
+      expect(loads.length, `${file} never reads the Candidates table`).toBeGreaterThan(0);
+    }
+  });
+
+  it('accepts candidateId in the body, defaulting to the seed candidate, in both workflows', () => {
+    const checkedPerFile = new Map<string, number>();
+
+    for (const { file, wf } of both) {
+      for (const n of wf.nodes.filter((x) => x.type === 'n8n-nodes-base.code')) {
+        const source = String(n.parameters['jsCode']);
+        if (!source.includes('candidateId')) continue;
+        if (!source.includes(`DEFAULT_CANDIDATE_ID = "${DEFAULT_CANDIDATE_ID}"`)) continue;
+        // The node that reads the body must default rather than reject an absent candidateId, so
+        // every pre-v3 caller keeps working unchanged.
+        expect(source, `${file} :: ${n.name}`).toMatch(/candidateId \|\| ''/);
+        checkedPerFile.set(file, (checkedPerFile.get(file) ?? 0) + 1);
+      }
+    }
+
+    // The assertion that makes the rest of them mean something.
+    expect(checkedPerFile.get('extract-project.json') ?? 0).toBeGreaterThan(0);
+    expect(checkedPerFile.get('match-role.json') ?? 0).toBeGreaterThan(0);
+  });
+
+  it('fails loudly on an unknown candidateId instead of typecasting a row into being', () => {
+    for (const { file, wf } of both) {
+      const loud = wf.nodes.filter((n) =>
+        String(n.parameters['jsCode'] ?? '').includes('is not in the Candidates table'),
+      );
+      expect(loud.length, `${file} would silently accept an unknown candidate`).toBeGreaterThan(0);
+      for (const n of loud) {
+        expect(String(n.parameters['jsCode']), `${file} :: ${n.name}`).toMatch(/throw new Error/);
+      }
+    }
+  });
+
+  it('stamps every created row with its Candidate link', () => {
+    const checkedPerFile = new Map<string, number>();
+
+    for (const { file, wf } of both) {
+      for (const n of wf.nodes.filter((x) => x.type === 'n8n-nodes-base.code')) {
+        const source = String(n.parameters['jsCode']);
+        if (!/Candidate: \[/.test(source)) continue;
+        checkedPerFile.set(file, (checkedPerFile.get(file) ?? 0) + 1);
+      }
+    }
+
+    // extract stamps the project row, the evidence fan-out and the review stub; match stamps results.
+    expect(checkedPerFile.get('extract-project.json') ?? 0).toBeGreaterThanOrEqual(3);
+    expect(checkedPerFile.get('match-role.json') ?? 0).toBeGreaterThanOrEqual(1);
+  });
+
+  it('keys Results as candidate × role × requirement, the exact adapter format', () => {
+    // src/store/airtable.ts writes `${result.candidate}-${role.id}-${result.requirementId}` and its
+    // reader strips the prefixes back off by the row's own Candidate link. A drifted key format here
+    // would round-trip into requirement ids that exist nowhere else.
+    const fan = matchRole.nodes.find((n) => n.name === 'Fan out results');
+    expect(fan, 'match-role.json has no Fan out results node').toBeDefined();
+    const source = String(fan?.parameters['jsCode']);
+    expect(source).toContain(`candidate.key + '-' + roleKey + '-' + r.requirementId`);
+    expect(source).toContain('Candidate: [candidate.name]');
+  });
+
+  it('scopes matching to the candidate before scoring, not after', () => {
+    // The same guarantee src/pipeline/index.ts makes: rows the scorer never sees are rows it
+    // structurally cannot cite. Technologies stay global.
+    const load = matchRole.nodes.find((n) => n.name === 'Load the record');
+    const source = String(load?.parameters['jsCode']);
+    expect(source).toMatch(/projectAll\.filter\(mine\)/);
+    expect(source).toMatch(/capAll\.filter\(mine\)/);
+    expect(source).toMatch(/evidenceAll\.filter\(mine\)/);
+    expect(source).not.toMatch(/techRows\.filter\(mine\)/);
   });
 });

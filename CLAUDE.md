@@ -10,9 +10,11 @@ Global standards load from `~/.claude/CLAUDE.md`.
 
 ## Non-negotiables
 
-- **Six tables, and no JSON blobs.** The rule is legibility, not a count: serialising structure into a
-  long-text field to avoid a table disables everything Airtable is for. `tests/schema-parity.test.ts`
-  pins the count and fails on a field whose name or description mentions JSON.
+- **Seven tables, and no JSON blobs.** The rule is legibility, not a count: serialising structure into a
+  long-text field to avoid a table disables everything Airtable is for. Candidates earned the seventh
+  tab the same way Results earned the sixth — a person is real structure, not a property dodging a tab.
+  `tests/schema-parity.test.ts` pins the count and fails on a field whose name or description mentions
+  JSON.
 - **The Gaps section stays.** It is the load-bearing claim. A scoring system that only reports its hits is
   a flattery generator and a reader can tell. `tests/vocabulary.test.ts` enforces it.
 - **The evidence gate stays.** A capability with no linked evidence can never score proven.
@@ -28,7 +30,7 @@ Global standards load from `~/.claude/CLAUDE.md`.
 - React 19 + TypeScript + Vite. Hand-written CSS, no framework. Two runtime dependencies.
 - Install: `pnpm install`
 - Run: `pnpm dev` (port 5273)
-- Test: `pnpm test` (180 passing, 3 skipped behind `LIVE_OPENROUTER=1`)
+- Test: `pnpm test` (209 passing, 3 skipped behind `LIVE_OPENROUTER=1`)
 - Typecheck: `pnpm typecheck`
 - Everything: `pnpm verify` (typecheck, tests, n8n drift check)
 - Credentials: `pnpm doctor`
@@ -37,12 +39,15 @@ Global standards load from `~/.claude/CLAUDE.md`.
 
 ## Where things live
 
-- `raw/` — 11 committed artifacts. Stage 0, deliberately messy.
+- `raw/` — 12 committed artifacts. Stage 0, deliberately messy.
 - `src/openrouter/` — protocol (model tiers, both traps), schemas, chat client, embeddings.
-- `src/pipeline/` — text, extract, validate, link, match, score, rationale, index (orchestrator).
-- `src/store/` — types (the six tables), seed, local adapter, Airtable adapter, mode detection.
-- `src/server/handlers.ts` — the `/api` surface, mounted by a Vite plugin in `vite.config.ts`.
-- `src/ui/` — App, Intake, FitReport, Records, ModeBanner, sample-posting.
+- `src/pipeline/` — text, extract, resume (paste-a-resume intake), validate, link, match, score,
+  rationale, index (orchestrator).
+- `src/store/` — types (the seven tables), seed, local adapter, Airtable adapter, mode detection.
+- `src/server/handlers.ts` — the `/api` surface, mounted by a Vite plugin in `vite.config.ts`. Holds
+  `POW_APP_TOKEN` and proxies to the n8n webhooks; the browser never sees the secret.
+- `src/ui/` — App, Applicants (landing: roster + resume intake), Score (the posting shelf), FitReport,
+  Intake, Records, ModeBanner, sample-posting.
 - `n8n/build.ts` — generates both workflows. Do not hand-edit the JSON.
 - `airtable/` — schema, provision, push, VIEWS.md, INTERFACE.md.
 - `docs/` — DESIGN.md, WRITEUP.md, SHOTLIST.md, DEMO-SCRIPT.md.
@@ -72,8 +77,17 @@ Global standards load from `~/.claude/CLAUDE.md`.
       round-trip in a real self-hosted n8n
 - [x] Airtable base created and seeded against a real account from one token, idempotent
 - [x] Zap documented with a testable sample payload
+- [x] Resume intake: a pasted resume becomes a Candidate plus receiptless claims (`pnpm test`,
+      tests/resume.test.ts)
+- [x] Claim promotion: a supporting document's receipts attach to the claims they match, and only
+      claims that predate the document
+- [x] Candidate isolation: matching and scoring are scoped to one candidate's rows before anything
+      reads the snapshot, in the app and in both workflows
+- [x] Token-gated endpoints: the n8n webhooks and the server proxy require `POW_APP_TOKEN` and fail
+      closed when it is unset
 - [x] README through the `technical-writing` skill with its grep pass re-run
-- [x] Nine screenshots captured by `pnpm screenshots`; three more need Joel's live accounts
+- [x] Nine screenshots captured by `pnpm screenshots`; three more need Joel's live accounts (the
+      committed set predates the v3 tabs and wants a reshoot)
 - [ ] 60 to 90 second recording
 
 # Compact instructions

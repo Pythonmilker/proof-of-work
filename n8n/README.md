@@ -20,9 +20,14 @@ N8N_BLOCK_ENV_ACCESS_IN_NODE=false npx -y n8n
 
 Editor at http://localhost:5678.
 
-**That environment variable matters.** Both workflows read `{{ $env.AIRTABLE_BASE_ID }}` and
-`{{ $env.OPENROUTER_API_KEY }}`, and recent n8n versions block `$env` inside nodes by default. Without
-it the expressions resolve empty and the Airtable node fails with a confusing base-not-found error.
+**That environment variable matters.** Both workflows read `{{ $env.AIRTABLE_BASE_ID }}`,
+`{{ $env.OPENROUTER_API_KEY }}` and `{{ $env.POW_APP_TOKEN }}`, and recent n8n versions block `$env`
+inside nodes by default. Without it the expressions resolve empty and the Airtable node fails with a
+confusing base-not-found error.
+
+**POW_APP_TOKEN gates both webhooks.** Every request must carry it in an `x-pow-app-token` header; the
+gate fails closed, so with the variable unset every call answers 401 with the reason named. The app
+server attaches the header from its own environment.
 
 ## Import them
 
@@ -31,8 +36,8 @@ npx -y n8n import:workflow --input=n8n/extract-project.json
 npx -y n8n import:workflow --input=n8n/match-role.json
 ```
 
-Verified on n8n 2.x: both import, and `n8n export:workflow --all` round-trips them at 19/19 and 17/17
-nodes with 13 connection sources each and no node type dropped.
+Verified on n8n 2.31.7: both import, and `n8n export:workflow --all` round-trips them at 25/25 and
+22/22 nodes with 17 and 16 connection sources and no node type dropped.
 
 The CLI needs a top-level `id` on the workflow, which `build.ts` derives from the workflow name. Without
 one the import fails with `SQLITE_CONSTRAINT: NOT NULL constraint failed: workflow_entity.id`. The editor
@@ -43,22 +48,28 @@ Then add one credential named **Airtable Personal Access Token** and activate bo
 
 ## extract-project.json
 
-19 nodes. Webhook, build request, OpenRouter, deterministic validation, then a branch.
+25 nodes. Webhook, token gate, build request, OpenRouter, deterministic validation, then a branch. An
+optional `candidateId` in the body names who owns the rows; the default is the seeded candidate, and an
+unknown id fails loudly rather than letting typecast mint a Candidates row out of a typo.
 
-The true side loads the Technologies and Capabilities tables, resolves the extraction's loose strings
-against them, writes the Project with its links, fans the receipts out to one Airtable record each, and
-answers 200. The false side writes a Project row with `Review Status = needs-review` and the validator's
-problem list attached, then answers 422.
+The true side loads the Candidates, Technologies and Capabilities tables, resolves the extraction's
+loose strings against the candidate's own record, writes the Project with its links, fans the receipts
+out to one Airtable record each, and answers 200. The false side writes a Project row with
+`Review Status = needs-review` and the validator's problem list attached, then answers 422. Every row
+either side writes carries its Candidate link.
 
 ## match-role.json
 
-17 nodes. The one to read is **Retrieve and score**, a Code node that ranks Airtable rows and computes
+22 nodes. The one to read is **Retrieve and score**, a Code node that ranks Airtable rows and computes
 every verdict and the coverage number in arithmetic. Only after that is a model asked for one sentence
 per requirement, from the rows retrieval returned. **Guard rationales** discards any generated sentence
 containing a number that is not in those records.
 
-Results are written as rows in the `Results` table, one per requirement, with the citations as real
-links. They used to be an escaped JSON string in a long-text field.
+`Load the record` scopes projects, capabilities and evidence to the requested `candidateId` before
+anything scores, the same guarantee `src/pipeline/index.ts` makes. Results are written as rows in the
+`Results` table, one per requirement, with the citations as real links and a Key that leads with the
+candidate (the exact format `src/store/airtable.ts` writes). They used to be an escaped JSON string in
+a long-text field.
 
 ## Things worth knowing before you edit
 

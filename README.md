@@ -3,14 +3,16 @@
 Proof of Work is a pipeline that turns messy evidence of what someone has built into a structured
 capability record, then scores that record against a pasted job description.
 
-The delivered product is an Airtable base: six linked tables, recruiter views, and a fit-report
+The delivered product is an Airtable base: seven linked tables, recruiter views, and a fit-report
 Interface, shared as a link that opens with no login. This repo holds everything that fills it: the
 extraction and scoring pipeline, the n8n workflows that run it, the React app that writes to it, and
 the scripts that build the base itself from one access token.
 
-The product is generic. The dataset it ships with belongs to one candidate, the way a CRM demo ships
-with sample contacts. A recruiter pastes a job description, and gets a scored report where every claim
-links to something a stranger can check, plus a section listing what the record does not cover.
+The seat is the recruiter's. Paste an applicant's resume and every claim lands unverified, because a
+resume asserts and does not prove. Ingest the applicant's supporting documents and the claims they
+back earn receipts. Score any applicant against any posting and every verdict cites the rows behind
+it, plus a section listing what the record does not cover. The roster ships with one worked example,
+the way a CRM demo ships with sample contacts.
 
 ## Requirements
 
@@ -45,8 +47,17 @@ hybrid, and every stage still runs.
 
 ## Try it
 
-On the Intake screen, click a sample and press Ingest. Three of the eleven files in `raw/` show different
-branches:
+The app lands on Applicants. The roster ships with one worked example, the record of the person who
+built this, every one of its 22 claims carrying a receipt.
+
+Paste a resume into New applicant (`raw/08-joel-resume.md` is the bundled fixture) and press "Read the
+resume". Identity, positions and claims are read out of the text, and every claim lands unverified.
+That is the honest default: nothing this system ingests gets credit for describing itself. The
+evidence gate caps a receiptless claim at partial until a document backs it.
+
+Supporting documents go in the slot below, attributed to whichever applicant is selected. Their
+receipts attach to the claims they match, and the claim chips flip from unverified to verified as they
+land. Three of the twelve files in `raw/` show different pipeline branches:
 
 | Sample | What happens | Where it lands |
 |---|---|---|
@@ -54,9 +65,10 @@ branches:
 | `01-tendril-readme.md` | Already on file | Dedup fires, the existing row updates |
 | `11-broken-fragment.txt` | Nothing checkable in it | Validation fails, row parked in Needs Review |
 
-Then open Match and press "Score this role". The bundled posting is the actual Arootah posting, captured
-2026-07-28, and the record scores 75 percent against it: 10 of its 16 requirements proven, 4 partial,
-2 gaps. That posting marks everything as required, so the required tally is the whole tally.
+Then open Score, pick an applicant, and press the button, which names whose fit it scores. The bundled
+posting is the actual Arootah posting, captured 2026-07-28, and the seeded record scores 75 percent
+against it: 10 of its 16 requirements proven, 4 partial, 2 gaps. That posting marks everything as
+required, so the required tally is the whole tally.
 
 ## Going live
 
@@ -67,13 +79,20 @@ one separately.
 OPENROUTER_API_KEY=sk-or-...      # real models, embeddings-backed retrieval
 AIRTABLE_PAT=pat...               # swaps the local store for a real base
 VITE_PIPELINE_ENDPOINT=https://...  # moves the pipeline into n8n
+POW_APP_TOKEN=...                 # shared secret the n8n webhooks require
 ```
+
+`POW_APP_TOKEN` stays server-side. The app server attaches it to every webhook call; the browser sends
+plain requests to `/api/pipeline/*` and never holds the secret, which is why the variable has no
+`VITE_` prefix. Set the same value in the n8n environment, where the gate fails closed: unset there,
+every request answers 401 with the reason named. n8n mode therefore requires the app server, since the
+static build has no process to hold the token.
 
 To create the Airtable base:
 
 ```bash
-pnpm airtable:provision   # 6 tables and 9 link fields, from one token
-pnpm airtable:push        # 7 projects, 44 technologies, 23 capabilities, 23 evidence rows
+pnpm airtable:provision   # 7 tables and 13 link fields, from one token
+pnpm airtable:push        # 1 candidate, 7 projects, 44 technologies, 22 capabilities, 23 evidence rows
 ```
 
 Provisioning needs a token with `schema.bases:write` and a workspace id. Both are idempotent, so a run
@@ -89,23 +108,30 @@ its own copy of the record.
 A credential that is set but rejected reports as rejected. `pnpm doctor` exits 1 and names the specific
 failure, and the header in the app reads `key rejected`.
 
-## The six tables
+## The seven tables
 
-Projects hold the work. Technologies and Capabilities describe it. Evidence proves it. Roles hold every
-posting scored against the record, and Results hold one row per requirement of each posting.
+Candidates hold the people. Projects hold the work. Technologies and Capabilities describe it. Evidence
+proves it. Roles hold every posting scored against the record, and Results hold one row per candidate,
+posting and requirement.
 
 It was five. Results used to be escaped JSON inside a long-text field on Roles, to hold the count down.
 That disabled filtering, grouping, colouring and Interfaces on the one table holding the output, and
 Airtable renders tables as horizontal tabs, so six versus five looks identical. The constraint is
-legibility, not arithmetic. `tests/schema-parity.test.ts` pins the count and fails on a JSON blob.
+legibility, not arithmetic, and Candidates earned the seventh tab the same way Results earned the
+sixth: a person is real structure, with Projects, Capabilities, Evidence and Results all hanging off
+one, not a property serialised into a field. `tests/schema-parity.test.ts` pins the count and fails on
+a JSON blob.
 
 One rule in that schema does most of the work: a Capability with nothing in its Evidence link cannot score
 as proven, however cleanly a requirement matches it. Adding a capability row is easy. Making it count
 requires attaching something checkable. `tests/evidence-gate.test.ts` pins this at a perfect 1.0 match
 score, where the gate is the only thing deciding the outcome.
 
-The seed carries 1 capability with no evidence and 5 marked as stretch. Those 6 rows account for all
-4 partial verdicts in the report.
+The seed itself makes no claim it cannot back: every seeded capability has evidence linked, and
+`tests/seed-integrity.test.ts` pins that. Receiptless rows enter through resume intake, where every
+pasted claim is born unverified until a supporting document promotes it. In the bundled report the
+gate shows as the 4 partial verdicts, which all carry the same shortfall: the matching capability is
+recorded as a stretch, not as shipped work.
 
 ## The workflows
 
@@ -116,11 +142,16 @@ pnpm n8n:build           # writes both files
 pnpm n8n:build --check   # fails if the committed JSON has drifted
 ```
 
-`extract-project.json` has 19 nodes. Webhook, build request, OpenRouter call, deterministic validation,
-then a branch: valid records go to dedup and three Airtable writes, invalid ones become a row in Needs
-Review with the validator's problem list attached.
+Both webhooks require a shared app token in an `x-pow-app-token` header, checked constant-time in a
+Code node that fails closed, and both take an optional `candidateId` defaulting to the seeded
+candidate. Every row they write carries its Candidate link, and Results keys lead with the candidate,
+the same shapes `src/store/airtable.ts` writes.
 
-`match-role.json` has 17 nodes. The one to read is `Retrieve and score`, a Code node that ranks Airtable
+`extract-project.json` has 25 nodes. Webhook, token gate, build request, OpenRouter call, deterministic
+validation, then a branch: valid records go to dedup and three Airtable writes, invalid ones become a
+row in Needs Review with the validator's problem list attached.
+
+`match-role.json` has 22 nodes. The one to read is `Retrieve and score`, a Code node that ranks Airtable
 rows and computes every verdict and the coverage number in arithmetic. Only after that is a model asked to
 describe each outcome in one sentence, from the rows retrieval returned. It receives no access to the base,
 so it cannot cite a project that did not match. `tests/workflow.test.ts` asserts the scoring node contains
@@ -133,7 +164,7 @@ someone imports the canvas.
 
 | Job | Model | Price per million |
 |---|---|---|
-| Extraction | anthropic/claude-haiku-4.5 | $1.00 in, $5.00 out |
+| Extraction and resume parsing | anthropic/claude-haiku-4.5 | $1.00 in, $5.00 out |
 | Posting parsing | openai/gpt-4o-mini | $0.15 in, $0.60 out |
 | Retrieval | qwen/qwen3-embedding-8b | $0.01 |
 | Rationale writing | meta-llama/llama-3.1-8b-instruct | $0.05 in, $0.08 out |
@@ -168,7 +199,7 @@ when a caller supplies an override that is not already in the chain.
 ## Tests
 
 ```bash
-pnpm test        # 180 passing, 3 skipped, 12 files
+pnpm test        # 209 passing, 3 skipped, 13 files
 pnpm typecheck
 pnpm verify      # typecheck, tests, and the workflow drift check
 ```
@@ -177,7 +208,7 @@ The three skipped tests hit the live OpenRouter catalogue. Enable them with `LIV
 no key, because `/api/v1/models` is public.
 
 `tests/seed-integrity.test.ts` transcribes every metric by hand from the source artifacts and compares it
-to the seed. It also checks the 11 files in `raw/` state the same figures, so a live ingest cannot produce
+to the seed. It also checks the 12 files in `raw/` state the same figures, so a live ingest cannot produce
 a record that contradicts the one already on screen.
 
 ## Known issues
@@ -217,11 +248,11 @@ API with throttling and batching rather than as a database. The `Store` interfac
 ## Layout
 
 ```
-raw/          11 committed artifacts: READMEs, a package manifest, test output, a store listing
+raw/          12 committed artifacts: READMEs, a package manifest, test output, a resume, a store listing
 src/openrouter/  protocol, schemas, chat client, embeddings
-src/pipeline/    extract, validate, link, match, score, rationale
+src/pipeline/    extract, resume, validate, link, match, score, rationale
 src/store/       types, seed, local adapter, Airtable adapter, mode detection
-src/ui/          intake, before and after, fit report, record browser
+src/ui/          applicants, score, fit report, record browser
 n8n/          two workflows plus the generator that writes them
 airtable/     schema, provisioning, seeding, the view and Interface scripts
 zapier/       one Zap and a sample payload

@@ -1,7 +1,8 @@
 # Demo script
 
 Target 75 seconds. One take, no cuts. Everything below runs with no credentials, so nothing can fail on
-camera because a key expired.
+camera because a key expired. Every beat, including the promotion, is verified against the
+credential-free path with the exact texts below.
 
 ## Before recording
 
@@ -10,84 +11,91 @@ rm -f data/session.json
 pnpm dev
 ```
 
-Browser at 1440 x 900, no bookmarks bar, no other tabs. Land on the Fit report tab, posting already in the box.
+Browser at 1440 x 900, no bookmarks bar. One background tab: the shared Airtable view. Land on the
+Applicants tab.
 
-If n8n and Airtable are running, keep them in two background tabs. They appear once each, for four
-seconds, and are not driven live.
+Put the two paste texts below in a scratch file. Copying them mid-take reads as fumbling.
+
+The resume:
+
+```
+# Jane Doe
+jane.doe@example.net
+
+## Skills
+React, TypeScript, AWS Lambda, Terraform, DynamoDB, Playwright
+
+## Experience
+### Platform Engineer - Initech
+- Built an internal React dashboard over DynamoDB for workflow tracking
+- Automated infrastructure deployments with Terraform
+```
+
+The supporting document:
+
+```
+# Initech workflow dashboard - delivery notes
+
+Jane built an internal React dashboard over DynamoDB for workflow tracking; it went live in 2025-11.
+
+- Stack: React, TypeScript, DynamoDB, AWS Lambda
+- 214 tests passing
+- Live at https://dashboard.initech.example
+```
 
 ## The take
 
-**0:00 to 0:10. What it is.**
+**0:00 to 0:10. The roster.**
 
-> "This ingests messy evidence of what somebody built, turns it into a record where every claim links to
-> something checkable, and scores it against a job description."
+> "This is a hiring tool, and the roster ships with one worked example: me. Every applicant is a claim
+> sheet, and every claim either carries a receipt or is flagged unverified."
 
-On screen: the Intake page, sample list visible. Do not move the mouse yet.
+On screen: Applicants, the seeded applicant selected, 22 verified claim chips visible.
 
-**0:10 to 0:25. The mess going in.**
+**0:10 to 0:25. A resume lands.**
 
-Click **Add evidence**, then `01-tendril-readme.md`. The box fills with a README.
+Paste the resume into New applicant, press "Read the resume".
 
-> "This is a real README. Prose, a feature table, a version number, a store id buried in the last
-> paragraph."
+> "Paste a resume and every claim lands unverified. That is the honest default. A resume asserts, it
+> does not prove, and nothing in this system gets credit for describing itself."
 
-Scroll the textarea once so it is obvious there is more than fits.
+Both of Jane's chips read unverified.
 
-**0:25 to 0:40. Ingest, and the stage list.**
+**0:25 to 0:40. A claim earns its receipt.**
 
-Press Ingest. Five lines resolve.
+Paste the delivery notes into the supporting-documents slot below, press Ingest.
 
-> "Extract, validate, dedup, link, write. Validation is deterministic, so an implausible metric gets
-> rejected rather than published. And it found this record already, so it updates instead of creating a
-> second one."
+> "Supporting documents promote claims. This one carries a test count and a live URL, the receipts
+> attach to the claim they back, and the chip flips. The chips that never flip are the interview
+> questions."
 
-Point at the `dedup` line reading `updating "Tendril" (same slug)`.
+One chip turns verified. The other stays unverified. Point at the one that stayed.
 
-**0:40 to 0:50. The error branch.**
+**0:40 to 1:00. The score.**
 
-Click `11-broken-fragment.txt`, press Ingest.
+Open Score, select the seeded applicant in the radio list. The Arootah posting is pre-loaded. Press
+"Score Joel's fit".
 
-> "Nothing checkable in that one. It does not get dropped, it gets a row in Needs Review with the reason
-> attached."
+> "Any applicant against any posting. Requirements parsed out, matched against the record in code,
+> scored in code. 75 percent: ten proven, four partial, two gaps. Every verdict cites the rows and
+> receipts behind it."
 
-The validate line goes red. Needs Review in the counts strip goes to 1.
+Expand one proven row so the citations are visible.
 
-This beat is worth the ten seconds. A pipeline that silently discards what it cannot parse produces
-output that looks complete and is not.
-
-**0:50 to 1:05. The match.**
-
-Press "Score this role". The posting is already in the box.
-
-> "The posting gets parsed into requirements, matched against the record in code, and scored in code.
-> 75 percent. Ten proven, four partial, two gaps."
-
-Expand one proven row.
-
-> "Every line cites the rows it matched and the receipts behind them. A Microsoft Store id, a test count,
-> a live URL."
-
-**1:05 to 1:15. The part that matters.**
+**1:00 to 1:15. The gaps.**
 
 Scroll to Gaps.
 
-> "Airtable and n8n come out partial, and the only evidence for either one is this project. It says so.
-> A capability with nothing linked to it cannot score as proven no matter how well it matches, which is
-> the difference between a capability record and a resume."
+> "And it says what is missing. The degree, the vendor line: real gaps, on the record. A scorer that
+> only reports hits is a flattery generator. The one that admits what is missing is the one you can
+> trust. The whole record is a shared Airtable view, no login, one link."
 
-Hold on the Gaps section for three seconds. Stop.
+Switch to the shared-view tab for the last two seconds. Stop.
 
-## If n8n and Airtable are live
+## Timing notes
 
-Add ten seconds between the ingest beat and the match beat. Switch to the n8n tab:
-
-> "Same pipeline, two committed workflows. This node is where the score is computed, in code, before any
-> model is asked to write a sentence."
-
-Then the Airtable tab, one second on the Needs Review view.
-
-Do not run anything live in either tab. They are illustrations, and driving a SaaS UI on camera is how a
-75-second take becomes a four-minute one.
+The spoken lines above total 180 words, roughly 75 seconds at demo pace. The hard ceiling is 90.
+If a beat runs long, cut the second sentence of the roster beat first; never cut the gaps beat.
 
 ## Compression
 

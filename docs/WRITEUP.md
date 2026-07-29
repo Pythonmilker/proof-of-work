@@ -14,7 +14,7 @@ with sample contacts.
 
 ## Stack
 
-Airtable is the application: six linked tables, recruiter views, and a fit-report Interface, all built
+Airtable is the application: seven linked tables, recruiter views, and a fit-report Interface, all built
 from a single access token by `pnpm airtable:provision`, so the schema is version-controlled code
 rather than clicks. Two n8n workflows carry the pipeline, committed as JSON, generated from the same TypeScript
 that runs locally, and verified to import into a real self-hosted instance. React and TypeScript
@@ -53,6 +53,12 @@ That row falls back to a deterministic template, and the report labels which of 
 One schema rule does the rest: a capability with nothing linked to it is capped at partial credit,
 however cleanly a requirement matches it. Adding a capability row is easy. Making it count requires
 attaching something a stranger can check.
+
+v3 turned the seat around without touching that machinery. A resume is an artifact whose claims arrive
+with no receipts, and the gate was built for exactly that shape: paste one and every claim lands
+unverified, capped at partial. Ingest the applicant's supporting documents and the receipts attach to
+the claims they match, one promotion at a time. The scorer needed no changes to become a
+claim-verification engine, and the claims that never earn a receipt are the interview questions.
 
 Against the actual posting the record scores 75 percent. Airtable and n8n come out partial, with this
 project named as their only evidence, because that is what the record contains.
@@ -96,12 +102,14 @@ and misses capabilities a posting only describes.
 
 The Zap polls on Zapier's schedule, up to 15 minutes on the free plan.
 
-Three of the eight screenshots need live n8n and Airtable accounts, so they are not in the repository.
-`docs/SHOTLIST.md` has the framing for each.
+Eleven screenshots are committed; the three that need live n8n and Airtable accounts are not.
+`docs/SHOTLIST.md` has the framing for each, and the committed set predates the v3 tab names, so the
+app shots want a reshoot.
 
 ## Numbers
 
-180 tests across 12 files, typecheck clean. 9,354 lines of TypeScript across 47 files, counted with
-`git ls-files "*.ts" "*.tsx" | xargs wc -l`. 7 projects, 44 technologies, 23 capabilities, 23 evidence
-rows. Two workflows, 36 nodes between them, verified to import and round-trip in a real n8n. 11 raw artifacts committed so the before-and-after
-is reproducible. The static build is 304 kB, 98 kB gzipped.
+209 tests across 13 files, typecheck clean. 11,650 lines of TypeScript across 51 files, counted with
+`git ls-files "*.ts" "*.tsx" | xargs wc -l`. 1 candidate, 7 projects, 44 technologies, 22 capabilities,
+23 evidence rows, every capability evidenced. Two workflows, 47 nodes between them, verified to import
+and round-trip in a real n8n. 12 raw artifacts committed so the before-and-after is reproducible. The
+static build ships 342 kB of JavaScript, 108 kB gzipped.

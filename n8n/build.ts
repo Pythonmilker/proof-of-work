@@ -31,6 +31,7 @@ import { EXTRACTION_SYSTEM } from '../src/pipeline/extract';
 import { JD_SYSTEM } from '../src/pipeline/jd';
 import { RATIONALE_SYSTEM } from '../src/pipeline/rationale';
 import { THRESHOLD_PARTIAL, THRESHOLD_PROVEN } from '../src/pipeline/score';
+import { DEFAULT_CANDIDATE_ID } from '../src/store/types';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -312,10 +313,14 @@ function buildExtractRequest(): string {
 //   models.length <= ${MAX_CHAIN_MODELS}           OpenRouter 400s on a longer array, and a 400 does not fall through
 const MODELS = ${JSON.stringify(EXTRACTION_MODELS)};
 const MAX_CHAIN_MODELS = ${MAX_CHAIN_MODELS};
+const DEFAULT_CANDIDATE_ID = ${JSON.stringify(DEFAULT_CANDIDATE_ID)};
 
 const body = $input.first().json.body || $input.first().json;
 const blob = String(body.blob || '').slice(0, 24000);
 const sourceName = String(body.sourceName || 'pasted-input');
+// Who owns what this ingest writes. Optional in the body; the default is the seeded candidate — the
+// same default src/pipeline/index.ts applies — so every existing caller keeps working unchanged.
+const candidateId = String(body.candidateId || '').trim() || DEFAULT_CANDIDATE_ID;
 
 if (!blob.trim()) {
   throw new Error('nothing to ingest');
@@ -327,6 +332,7 @@ if (MODELS.length > MAX_CHAIN_MODELS) {
 return [{
   json: {
     sourceName,
+    candidateId,
     blob,
     request: {
       models: MODELS,
@@ -475,14 +481,23 @@ return [{
  */
 function resolveTaxonomyNode(): string {
   return `const validated = $('Validate extraction').first().json;
+const candidateId = $('Build extraction request').first().json.candidateId;
 
 const rows = (name) => $(name).all().map((i) => i.json).filter((r) => r && r.fields);
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9+#./\\s-]+/g, ' ').replace(/\\s+/g, ' ').trim();
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-\$/g, '');
 const csv = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
+// The candidate must already exist. Writing the link by name under typecast would CREATE a Candidates
+// row out of a typo — the silent fallback this repo argues against — so an unknown id fails loudly
+// here, before anything is written.
+const candidateRow = rows('Load candidates').find((r) => r.fields.Key === candidateId);
+if (!candidateRow) throw new Error('candidateId "' + candidateId + '" is not in the Candidates table');
+
 const techRows = rows('Load technologies');
-const capRows = rows('Load capabilities');
+// Capabilities are owned per-candidate (docs/DESIGN.md §v3.2). Another person's claim with the same
+// wording is a different row, so only this candidate's rows are on the table for matching.
+const capRows = rows('Load capabilities').filter((r) => ((r.fields.Candidate || [])[0]) === candidateRow.id);
 
 // Existing row wins. A name that matches an existing row by name OR by alias links to it; anything left
 // over is genuinely new and gets created with a proper Key so the record stays readable.
@@ -514,7 +529,7 @@ for (const raw of validated.capabilities || []) {
   if (!capNames.includes(hit.fields.Name)) capNames.push(hit.fields.Name);
 }
 
-return [{ json: { techNames, capNames, unresolved, projectName: validated.project.Name, slugOf: slug('') } }];`;
+return [{ json: { techNames, capNames, unresolved, projectName: validated.project.Name, candidateKey: candidateId, candidateName: candidateRow.fields.Name, slugOf: slug('') } }];`;
 }
 
 /**
@@ -531,15 +546,24 @@ return [{ json: { techNames, capNames, unresolved, projectName: validated.projec
  */
 function fanOutEvidenceNode(): string {
   return `const validated = $('Validate extraction').first().json;
+const resolved = $('Resolve taxonomy').first().json;
+const DEFAULT_CANDIDATE_ID = ${JSON.stringify(DEFAULT_CANDIDATE_ID)};
 const projectKey = validated.project.key;
 const projectName = validated.project.Name;
 const today = new Date().toISOString().slice(0, 10);
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-\$/g, '');
 
+// Same scoping src/pipeline/index.ts applies: the seed candidate's receipts keep their established
+// ids, anyone else's carry the candidate so two people's identical receipts never share a row.
+const scope = resolved.candidateKey === DEFAULT_CANDIDATE_ID
+  ? projectKey
+  : resolved.candidateKey.replace(/^candidate-/, '') + '-' + projectKey;
+
 return (validated.evidence || []).map((e) => ({
   json: {
-    Key: ('ev-' + projectKey + '-' + slug(e.label) + '-' + slug(e.value).slice(0, 24)).slice(0, 96),
+    Key: ('ev-' + scope + '-' + slug(e.label) + '-' + slug(e.value).slice(0, 24)).slice(0, 96),
+    Candidate: [resolved.candidateName],
     Label: e.label,
     Kind: e.kind,
     Value: e.value,
@@ -561,13 +585,19 @@ return (validated.evidence || []).map((e) => ({
 function projectRowNode(): string {
   return `const validated = $('Validate extraction').first().json;
 const resolved = $('Resolve taxonomy').first().json;
+const DEFAULT_CANDIDATE_ID = ${JSON.stringify(DEFAULT_CANDIDATE_ID)};
 
 const { key, ...fields } = validated.project;
+// The seed candidate's project ids stay plain slugs (the seed and every test know them); any other
+// candidate's are candidate-scoped — the convention src/pipeline/index.ts sets, so two people's
+// "Tendril" rows never collide on Key.
+const scopedKey = resolved.candidateKey === DEFAULT_CANDIDATE_ID ? key : resolved.candidateKey + '-' + key;
 
 return [{
   json: {
-    Key: key,
+    Key: scopedKey,
     ...fields,
+    Candidate: [resolved.candidateName],
     Technologies: resolved.techNames,
     Capabilities: resolved.capNames,
   },
@@ -580,8 +610,15 @@ function reviewStubNode(): string {
 // A pipeline that discards what it cannot parse produces output that looks complete and is not, and the
 // omission is invisible — the report simply never mentions the thing. A visible bad row is worth more
 // than a clean-looking gap. This is what the "Needs Review" view lists.
-const failure = $input.first().json;
+const failure = $('Validate extraction').first().json;
+const candidateId = $('Build extraction request').first().json.candidateId;
 const label = 'Unparsed: ' + failure.sourceName;
+
+// Parked rows carry their owner too, exactly as the app's error branch stamps its stub — and the same
+// loud failure on an unknown id, so typecast can never invent a Candidates row on the error path.
+const candidateRow = $('Load candidates for review').all().map((i) => i.json)
+  .find((r) => r && r.fields && r.fields.Key === candidateId);
+if (!candidateRow) throw new Error('candidateId "' + candidateId + '" is not in the Candidates table');
 
 return [{
   json: {
@@ -590,6 +627,7 @@ return [{
     // branch would itself have failed silently, which would have been a particularly bad joke.
     Key: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
     Name: label,
+    Candidate: [candidateRow.fields.Name],
     Status: 'in-development',
     Summary: 'Extraction did not produce a usable record from ' + failure.sourceName + '.',
     'Review Status': 'needs-review',
@@ -613,6 +651,9 @@ const extractWorkflow = (() => {
       `**Failures are stored, not dropped.** The false branch writes a real row with the reason attached,\n` +
       `which the Needs Review view lists. A pipeline that silently discards what it cannot parse produces\n` +
       `output that looks complete and is not.\n\n` +
+      `Every row written here carries its Candidate link (\`candidateId\` in the body; the default is the\n` +
+      `seeded candidate). Resume intake is not on this canvas: in v3.0 the resume path runs through the\n` +
+      `app server.\n\n` +
       `### Setup\n` +
       `- Environment: OPENROUTER_API_KEY, AIRTABLE_BASE_ID, POW_APP_TOKEN\n` +
       `- Credential: an Airtable personal access token with data.records read and write\n` +
@@ -629,16 +670,17 @@ const extractWorkflow = (() => {
     code('Validate extraction', [1060, 260], validateNode()),
     ifNode('Usable record?', [1280, 260], '={{ $json.valid }}'),
 
-    loadAll('Load technologies', 'Technologies', [1520, 60]),
-    loadAll('Load capabilities', 'Capabilities', [1740, 60]),
-    code('Resolve taxonomy', [1960, 60], resolveTaxonomyNode()),
-    code('Build project row', [2180, 60], projectRowNode()),
-    upsert('Write project', 'Projects', [2400, 60]),
+    loadAll('Load candidates', 'Candidates', [1520, 60]),
+    loadAll('Load technologies', 'Technologies', [1740, 60]),
+    loadAll('Load capabilities', 'Capabilities', [1960, 60]),
+    code('Resolve taxonomy', [2180, 60], resolveTaxonomyNode()),
+    code('Build project row', [2400, 60], projectRowNode()),
+    upsert('Write project', 'Projects', [2620, 60]),
 
-    code('Fan out evidence', [2620, 180], fanOutEvidenceNode()),
-    upsert('Write evidence rows', 'Evidence', [2840, 180]),
+    code('Fan out evidence', [2840, 180], fanOutEvidenceNode()),
+    upsert('Write evidence rows', 'Evidence', [3060, 180]),
 
-    respond('Respond', [2620, -40],
+    respond('Respond', [2840, -40],
       `={{ {\n` +
       `  ok: true,\n` +
       `  project: $('Build project row').first().json.Name,\n` +
@@ -650,9 +692,10 @@ const extractWorkflow = (() => {
       `  warnings: $('Validate extraction').first().json.warnings\n` +
       `} }}`),
 
-    code('Build review row', [1520, 420], reviewStubNode()),
-    upsert('Write Needs Review', 'Projects', [1740, 420]),
-    respond('Rejected', [1960, 420],
+    loadAll('Load candidates for review', 'Candidates', [1520, 420]),
+    code('Build review row', [1740, 420], reviewStubNode()),
+    upsert('Write Needs Review', 'Projects', [1960, 420]),
+    respond('Rejected', [2180, 420],
       `={{ {\n` +
       `  ok: false,\n` +
       `  parked: $('Build review row').first().json.Name,\n` +
@@ -666,7 +709,7 @@ const extractWorkflow = (() => {
       `\`retryable\` distinguishes a malformed reply (worth asking again) from a source that simply\n` +
       `contained no project (asking again spends money to fail identically).`),
 
-    sticky('Linking note', [2340, 320], [520, 250],
+    sticky('Linking note', [2560, 320], [520, 250],
       `### How the links get written\n\n` +
       `Every write is an **upsert matched on \`Key\`**, which is Airtable's own \`performUpsert\`\n` +
       `— so the dedup is the write, not a separate lookup node.\n\n` +
@@ -688,8 +731,12 @@ const extractWorkflow = (() => {
     ['Build extraction request', 'Extract with Claude'],
     ['Extract with Claude', 'Validate extraction'],
     ['Validate extraction', 'Usable record?'],
-    ['Usable record?', 'Load technologies', 0],
-    ['Usable record?', 'Build review row', 1],
+    // Both branches resolve the candidate before they write: the true branch to link and scope, the
+    // error branch so even a parked row knows its owner.
+    ['Usable record?', 'Load candidates', 0],
+    ['Usable record?', 'Load candidates for review', 1],
+    ['Load candidates', 'Load technologies'],
+    ['Load candidates for review', 'Build review row'],
     ['Load technologies', 'Load capabilities'],
     ['Load capabilities', 'Resolve taxonomy'],
     ['Resolve taxonomy', 'Build project row'],
@@ -858,26 +905,47 @@ return [{
 }
 
 function loadRecordNode(): string {
-  return `// Flatten the four Airtable reads into one object, translating record ids back into our slugs.
+  return `// Flatten the five Airtable reads into one object, translating record ids back into our slugs.
 //
 // Airtable identifies rows with opaque recXXXX ids that do not exist until a row is written, while
 // everything else here identifies them by slug. Every table carries a Key field for exactly this
 // reason, and this node is where the translation happens.
+const DEFAULT_CANDIDATE_ID = ${JSON.stringify(DEFAULT_CANDIDATE_ID)};
 const table = (name) => $(name).all().map((i) => i.json);
+
+// Whose record goes on the table. Optional in the webhook body; the default is the seeded candidate —
+// the same default src/pipeline/index.ts applies — so every existing caller keeps working unchanged.
+const requested = String((($('Role received').first().json.body) || {}).candidateId || '').trim();
+const candidateId = requested || DEFAULT_CANDIDATE_ID;
+
+const candidateRows = table('Load candidates');
+const candidateRow = candidateRows.find((r) => r.fields && r.fields.Key === candidateId);
+// Loud, not silent: scoring an unknown candidate against an empty record would report all-gaps and
+// look exactly like an answer.
+if (!candidateRow) throw new Error('candidateId "' + candidateId + '" is not in the Candidates table');
 
 const byRecord = {};
 const collect = (rows) => rows.forEach((r) => { if (r.fields && r.fields.Key) byRecord[r.id] = r.fields.Key; });
-const projectRows = table('Load projects');
+const projectAll = table('Load projects');
 const techRows = table('Load technologies');
-const capRows = table('Load capabilities');
-const evidenceRows = table('Load evidence');
-[projectRows, techRows, capRows, evidenceRows].forEach(collect);
+const capAll = table('Load capabilities');
+const evidenceAll = table('Load evidence');
+[candidateRows, projectAll, techRows, capAll, evidenceAll].forEach(collect);
+
+// Scope before scoring, exactly as src/pipeline/index.ts does: projects, capabilities and evidence are
+// owned per-candidate; technologies stay global — React is React for everyone. Rows the scorer never
+// sees are rows it structurally cannot cite.
+const mine = (r) => (((r.fields && r.fields.Candidate) || [])[0]) === candidateRow.id;
+const projectRows = projectAll.filter(mine);
+const capRows = capAll.filter(mine);
+const evidenceRows = evidenceAll.filter(mine);
 
 const links = (fields, field) => (fields[field] || []).map((id) => byRecord[id]).filter(Boolean);
 const csv = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 return [{
   json: {
+    candidate: { key: candidateId, name: candidateRow.fields.Name },
     projects: projectRows.map((r) => ({
       key: r.fields.Key, name: r.fields.Name, status: r.fields.Status,
       reviewStatus: r.fields['Review Status'] || 'ok',
@@ -998,8 +1066,9 @@ return [{
 /**
  * One Results row per requirement, citations written as links.
  *
- * Links are given as the target's primary-field value (Technology.Name, Capability.Name, Project.Name,
- * Evidence.Label, Role.Title) and the node runs with typecast, so Airtable resolves them to record ids.
+ * Links are given as the target's primary-field value (Candidate.Name, Technology.Name, Capability.Name,
+ * Project.Name, Evidence.Label, Role.Title) and the node runs with typecast, so Airtable resolves them
+ * to record ids.
  * This is the payoff of the sixth table: the citations become traversable rows instead of slugs inside
  * a string, and the Gaps view becomes a filter rather than an impossibility.
  */
@@ -1007,6 +1076,7 @@ function fanOutResultsNode(): string {
   return `const scored = $('Retrieve and score').first().json;
 const rows = $('Load the record').first().json;
 const guarded = $('Guard rationales').first().json;
+const candidate = rows.candidate;
 const roleKey = guarded.key;
 const results = guarded.results || [];
 
@@ -1015,7 +1085,10 @@ const labelOf = (key) => (rows.evidence.find((e) => e.key === key) || {}).label;
 
 return results.map((r) => ({
   json: {
-    Key: roleKey + '-' + r.requirementId,
+    // Results rows are candidate × role × requirement, so the candidate leads the Key — the exact
+    // format src/store/airtable.ts writes, and what its reader strips back off.
+    Key: candidate.key + '-' + roleKey + '-' + r.requirementId,
+    Candidate: [candidate.name],
     Requirement: r.requirement.text,
     Kind: r.requirement.kind,
     Category: r.requirement.category,
@@ -1044,8 +1117,10 @@ const matchWorkflow = (() => {
   const nodes: N8nNode[] = [
     sticky('Overview', [-640, -220], [520, 700],
       `## Score a job description against the record\n\n` +
-      `POST \`{ "text": "<the posting>" }\` and get back a coverage score, a verdict per requirement\n` +
-      `with citations, and a Gaps section.\n\n` +
+      `POST \`{ "text": "<the posting>" }\` — plus an optional \`candidateId\`, defaulting to the seeded\n` +
+      `candidate — and get back a coverage score, a verdict per requirement with citations, and a Gaps\n` +
+      `section, all scoped to that candidate's record. Results rows carry the Candidate link and a\n` +
+      `candidate-prefixed Key, the same shape the application's Airtable adapter writes.\n\n` +
       `### The claim this canvas makes\n\n` +
       `**Matching is deterministic. The model only writes sentences.**\n\n` +
       `\`Retrieve and score\` is a Code node. It ranks rows that already exist in Airtable and computes\n` +
@@ -1081,6 +1156,7 @@ const matchWorkflow = (() => {
       provider: { require_parameters: true },
     })),
 
+    loadTable('Load candidates', 'Candidates', [880, -20]),
     loadTable('Load projects', 'Projects', [880, 120]),
     loadTable('Load technologies', 'Technologies', [880, 260]),
     loadTable('Load capabilities', 'Capabilities', [880, 400]),
@@ -1116,6 +1192,7 @@ const matchWorkflow = (() => {
       `  ok: true,\n` +
       `  role: $('Build role row').first().json.Title,\n` +
       `  company: $('Build role row').first().json.Company,\n` +
+      `  candidate: $('Load the record').first().json.candidate.name,\n` +
       `  coverage: $('Guard rationales').first().json.coverage,\n` +
       `  gaps: $('Guard rationales').first().json.gaps\n` +
       `} }}`),
@@ -1141,10 +1218,12 @@ const matchWorkflow = (() => {
     ['Verify app token', 'Token accepted?'],
     ['Token accepted?', 'Parse the posting', 0],
     ['Token accepted?', 'Unauthorized', 1],
+    ['Parse the posting', 'Load candidates'],
     ['Parse the posting', 'Load projects'],
     ['Parse the posting', 'Load technologies'],
     ['Parse the posting', 'Load capabilities'],
     ['Parse the posting', 'Load evidence'],
+    ['Load candidates', 'Load the record'],
     ['Load projects', 'Load the record'],
     ['Load technologies', 'Load the record'],
     ['Load capabilities', 'Load the record'],

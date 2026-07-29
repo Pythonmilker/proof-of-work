@@ -141,6 +141,50 @@ Remaining: the 1-hidden-field chip check in incognito (cosmetic), VIEWS.md §C o
 INTERFACE.md pages (~1 h), three SaaS screenshots, the 75s film. A reusable skill pack from this build landed at
 _reference/skill-packs/airtable-n8n-backend/.
 
+## v3 RECRUITER SEAT (2026-07-28)
+
+The seat turned around: the recruiter sits at the machine, and resumes drop into the intake slot.
+Full spec docs/DESIGN.md §v3. Branch `feat/recruiter-seat`. 209 tests across 13 files, `pnpm verify`
+green, Joel × Arootah still 75% (10 proven · 4 partial · 2 gaps) — the pinned regression anchor held
+through the whole migration (tests/resume.test.ts).
+
+What landed:
+
+- **Store: seven tables.** `Candidates` joins; Projects, Capabilities and Evidence carry a
+  `candidate` stamp; Results keys are `{candidateKey}-{roleKey}-req-N`. Seed wraps the whole record
+  as `candidate-joel`. cap-brownfield was cut from the seed the same day: in the recruiter frame an
+  evidence-less seeded claim read as a claim Joel never backed, so the seed now carries zero
+  receiptless capabilities and `tests/seed-integrity.test.ts` pins that. Unverified rows now enter
+  only through resume intake, which is the gate's visible example.
+- **Resume path.** `ingestResume` in src/pipeline/index.ts plus src/pipeline/resume.ts:
+  deterministic-first (resumes are bullet lists, the jd.ts lesson reapplied), model lane for prose
+  resumes, fixture `raw/08-joel-resume.md`. Claims land as stretch capabilities with empty evidence;
+  supporting documents promote only claims that predate them.
+- **UI reseat.** Tabs are Applicants / Score / Fit report. Applicants is the landing: roster,
+  claim chips (verified vs unverified), resume paste, supporting-document slot. Score is the posting
+  shelf — any applicant against any posting, button names whose fit it scores. Records demoted to a
+  demo-mode footer link; live mode links out to the base.
+- **Security boundary (§v3.7).** `POW_APP_TOKEN` server-side only, never `VITE_`-prefixed. The server
+  proxy attaches it; both n8n webhooks check it constant-time in a Code node ahead of everything and
+  fail closed (unset = 401 with the reason named). n8n mode now requires the app server.
+- **n8n candidates.** Both workflows take an optional `candidateId` (default `candidate-joel`), load
+  the Candidates table, fail loudly on an unknown id (typecast would otherwise mint a candidate out
+  of a typo), scope capabilities/projects/evidence to the candidate before scoring, and stamp every
+  written row — project, evidence, review stub, results — with the Candidate link. Results keys match
+  the adapter format exactly. Regenerated: extract 25 nodes, match 22. Import re-verified on n8n
+  2.31.7: both import and `export:workflow --all` round-trips 25/25 and 22/22 nodes, 17 and 16
+  connection sources, no node type dropped.
+
+What remains:
+
+1. **Live-base migration.** The real Airtable base is still the pre-v3 six-table shape. Re-run
+   `pnpm airtable:provision` + `pnpm airtable:push` (idempotent) to add Candidates and the ownership
+   links, then re-check the shared view.
+2. **Screenshots.** The three SaaS shots still need Joel's accounts, and the eleven committed shots
+   predate the v3 tabs — reshoot after the live-base migration.
+3. **The film.** 75 seconds, script rewritten for the recruiter seat in docs/DEMO-SCRIPT.md, every
+   beat verified against the credential-free path (including the promotion beat's exact paste texts).
+
 ## Open
 
 1. **Screenshots 1, 2 and 3.** The base and n8n are both up now, so this is framing rather than setup.
