@@ -13,9 +13,30 @@
  * Typed as `Snapshot` on purpose — the compiler is the first check that the seed matches the schema.
  */
 
-import type { Capability, Evidence, Project, Snapshot, Technology } from './types';
+import { DEFAULT_CANDIDATE_ID, type Candidate, type Capability, type Evidence, type Project, type Snapshot, type Technology } from './types';
 
 const VERIFIED = '2026-07-27';
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * Candidates
+ *
+ * One row: the whole existing record, wrapped. The link arrays start empty and are mirrored from the
+ * `candidate` stamp on every project, capability and evidence row — same pattern as the technologies'
+ * reverse links below, and for the same reason: one declared direction cannot drift from the other.
+ * ───────────────────────────────────────────────────────────────────────────────────────────────── */
+
+const candidates: Candidate[] = [
+  {
+    id: DEFAULT_CANDIDATE_ID,
+    name: 'Joel Brannan',
+    contact: 'joelb@viralhostdigital.com',
+    source: 'seed',
+    ingestedAt: `${VERIFIED}T00:00:00.000Z`,
+    projects: [],
+    capabilities: [],
+    evidence: [],
+  },
+];
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
  * Technologies
@@ -94,37 +115,37 @@ const technologies: Technology[] = [
 
 const evidence: Evidence[] = [
   // Tendril
-  { id: 'ev-tendril-store', label: 'Microsoft Store product id', kind: 'store-listing', value: '9NRC4P6JQ962', url: 'https://apps.microsoft.com/detail/9NRC4P6JQ962', verifiedOn: VERIFIED, projects: ['tendril'] },
-  { id: 'ev-tendril-site', label: 'Product site', kind: 'live-url', value: 'tendrilapp.ai', url: 'https://tendrilapp.ai', verifiedOn: VERIFIED, projects: ['tendril'] },
-  { id: 'ev-tendril-unit', label: 'Vitest unit cases', kind: 'test-count', value: '536 passing across 24 files', url: null, verifiedOn: VERIFIED, projects: ['tendril'] },
-  { id: 'ev-tendril-e2e', label: 'Playwright end-to-end cases', kind: 'test-count', value: '124 passing', url: null, verifiedOn: VERIFIED, projects: ['tendril'] },
-  { id: 'ev-tendril-commits', label: 'Commits on main', kind: 'repo-metric', value: '125', url: null, verifiedOn: VERIFIED, projects: ['tendril'] },
-  { id: 'ev-tendril-cert', label: 'Store certification rounds passed', kind: 'artifact', value: '10 rounds, R2 through R10 approved', url: null, verifiedOn: VERIFIED, projects: ['tendril'] },
-  { id: 'ev-tendril-proxy', label: 'Cross-provider streaming translation proxy', kind: 'repo-metric', value: '2629 lines, documented SSE state machine', url: null, verifiedOn: VERIFIED, projects: ['tendril'] },
+  { id: 'ev-tendril-store', label: 'Microsoft Store product id', kind: 'store-listing', value: '9NRC4P6JQ962', url: 'https://apps.microsoft.com/detail/9NRC4P6JQ962', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
+  { id: 'ev-tendril-site', label: 'Product site', kind: 'live-url', value: 'tendrilapp.ai', url: 'https://tendrilapp.ai', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
+  { id: 'ev-tendril-unit', label: 'Vitest unit cases', kind: 'test-count', value: '536 passing across 24 files', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
+  { id: 'ev-tendril-e2e', label: 'Playwright end-to-end cases', kind: 'test-count', value: '124 passing', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
+  { id: 'ev-tendril-commits', label: 'Commits on main', kind: 'repo-metric', value: '125', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
+  { id: 'ev-tendril-cert', label: 'Store certification rounds passed', kind: 'artifact', value: '10 rounds, R2 through R10 approved', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
+  { id: 'ev-tendril-proxy', label: 'Cross-provider streaming translation proxy', kind: 'repo-metric', value: '2629 lines, documented SSE state machine', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
 
   // Parastoria
-  { id: 'ev-parastoria-site', label: 'Product domain', kind: 'live-url', value: 'parastoria.app', url: 'https://parastoria.app', verifiedOn: VERIFIED, projects: ['parastoria'] },
-  { id: 'ev-parastoria-tests', label: 'Test cases', kind: 'test-count', value: '891 across 65 files', url: null, verifiedOn: VERIFIED, projects: ['parastoria'] },
-  { id: 'ev-parastoria-commits', label: 'Commits on main', kind: 'repo-metric', value: '185', url: null, verifiedOn: VERIFIED, projects: ['parastoria'] },
+  { id: 'ev-parastoria-site', label: 'Product domain', kind: 'live-url', value: 'parastoria.app', url: 'https://parastoria.app', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
+  { id: 'ev-parastoria-tests', label: 'Test cases', kind: 'test-count', value: '891 across 65 files', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
+  { id: 'ev-parastoria-commits', label: 'Commits on main', kind: 'repo-metric', value: '185', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
 
   // Viral Host Digital
-  { id: 'ev-vhd-site', label: 'Live company platform', kind: 'live-url', value: 'viralhostdigital.com', url: 'https://viralhostdigital.com', verifiedOn: VERIFIED, projects: ['viral-host-digital'] },
-  { id: 'ev-vhd-terraform', label: 'Terraform-managed resources', kind: 'infra-metric', value: '212 resources, multi-region', url: null, verifiedOn: VERIFIED, projects: ['viral-host-digital'] },
-  { id: 'ev-vhd-dynamo', label: 'Multi-tenant CRM tables', kind: 'infra-metric', value: '21 DynamoDB tables scoped by Cognito custom:tenantId', url: null, verifiedOn: VERIFIED, projects: ['viral-host-digital'] },
-  { id: 'ev-vhd-codebuild', label: 'CI/CD pipeline', kind: 'infra-metric', value: 'CodeBuild ViralHostSiteBuild: build to S3 to CloudFront invalidation', url: null, verifiedOn: VERIFIED, projects: ['viral-host-digital'] },
+  { id: 'ev-vhd-site', label: 'Live company platform', kind: 'live-url', value: 'viralhostdigital.com', url: 'https://viralhostdigital.com', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
+  { id: 'ev-vhd-terraform', label: 'Terraform-managed resources', kind: 'infra-metric', value: '212 resources, multi-region', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
+  { id: 'ev-vhd-dynamo', label: 'Multi-tenant CRM tables', kind: 'infra-metric', value: '21 DynamoDB tables scoped by Cognito custom:tenantId', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
+  { id: 'ev-vhd-codebuild', label: 'CI/CD pipeline', kind: 'infra-metric', value: 'CodeBuild ViralHostSiteBuild: build to S3 to CloudFront invalidation', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
 
   // North Star
-  { id: 'ev-ns-review', label: 'Client review', kind: 'client-review', value: '5.0 stars, zero revisions requested', url: null, verifiedOn: VERIFIED, projects: ['north-star-support-bot'] },
-  { id: 'ev-ns-tests', label: 'Passing tests', kind: 'test-count', value: '359 across 19 files', url: null, verifiedOn: VERIFIED, projects: ['north-star-support-bot'] },
-  { id: 'ev-ns-bundle', label: 'Shipped bundle size', kind: 'repo-metric', value: '62 kB, 23 kB gzipped', url: null, verifiedOn: VERIFIED, projects: ['north-star-support-bot'] },
-  { id: 'ev-ns-video', label: 'Demo recording', kind: 'video', value: '2 minutes 21 seconds, all four use cases plus a fallback', url: null, verifiedOn: VERIFIED, projects: ['north-star-support-bot'] },
+  { id: 'ev-ns-review', label: 'Client review', kind: 'client-review', value: '5.0 stars, zero revisions requested', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
+  { id: 'ev-ns-tests', label: 'Passing tests', kind: 'test-count', value: '359 across 19 files', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
+  { id: 'ev-ns-bundle', label: 'Shipped bundle size', kind: 'repo-metric', value: '62 kB, 23 kB gzipped', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
+  { id: 'ev-ns-video', label: 'Demo recording', kind: 'video', value: '2 minutes 21 seconds, all four use cases plus a fallback', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
 
   // Client sites
-  { id: 'ev-dewdrop', label: 'Client site', kind: 'live-url', value: 'dewdropkc.com', url: 'https://dewdropkc.com', verifiedOn: VERIFIED, projects: ['client-and-early-web-work'] },
-  { id: 'ev-sparkle', label: 'Client site', kind: 'live-url', value: 'mywindowssparkle.com', url: 'https://mywindowssparkle.com', verifiedOn: VERIFIED, projects: ['client-and-early-web-work'] },
+  { id: 'ev-dewdrop', label: 'Client site', kind: 'live-url', value: 'dewdropkc.com', url: 'https://dewdropkc.com', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['client-and-early-web-work'] },
+  { id: 'ev-sparkle', label: 'Client site', kind: 'live-url', value: 'mywindowssparkle.com', url: 'https://mywindowssparkle.com', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['client-and-early-web-work'] },
 
   // Certification
-  { id: 'ev-aws-ccp', label: 'AWS Certified Cloud Practitioner', kind: 'certification', value: 'CLF-C02, issued Aug 2025, valid through Jul 2028', url: null, verifiedOn: VERIFIED, projects: [] },
+  { id: 'ev-aws-ccp', label: 'AWS Certified Cloud Practitioner', kind: 'certification', value: 'CLF-C02, issued Aug 2025, valid through Jul 2028', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: [] },
 
   // This project. The only receipts backing Airtable and n8n, which is the honest position, and the
   // Gaps section says so in as many words.
@@ -133,8 +154,8 @@ const evidence: Evidence[] = [
   // to tick "n8n and/or Zapier" in a posting. n8n does the same job better, so the Zap was decoration,
   // and a decorative row in a record whose entire argument is that its claims are backed is worse than
   // an empty one. The posting still asks for Zapier; the record does not have it, and now says so.
-  { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '6 tables and a no-login shared fit-report view, provisioned from a single PAT via the Meta API', url: 'https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC', verifiedOn: VERIFIED, projects: ['proof-of-work'] },
-  { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and checked for drift in CI', url: null, verifiedOn: VERIFIED, projects: ['proof-of-work'] },
+  { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '6 tables and a no-login shared fit-report view, provisioned from a single PAT via the Meta API', url: 'https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and checked for drift in CI', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -151,6 +172,7 @@ const capabilities: Capability[] = [
     name: 'Structured LLM output',
     statement: 'Constrains a model to a strict JSON schema and re-validates every field as untrusted input.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['structured output', 'json schema', 'function calling', 'tool use', 'json mode', 'constrained generation', 'prompt design', 'designing prompt', 'prompt engineering', 'schema design for llm'],
     projects: ['north-star-support-bot', 'tendril', 'proof-of-work'],
     evidence: ['ev-ns-tests', 'ev-ns-review', 'ev-tendril-proxy'],
@@ -160,6 +182,7 @@ const capabilities: Capability[] = [
     name: 'LLM application integration',
     statement: 'Ships product features backed by language models, including streaming, metering and fallback behaviour.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['llm integration', 'ai integration', 'integrate llms', 'ai feature', 'llm api', 'generative ai', 'ai-powered', 'large language model', 'language model', 'llm', 'production feature', 'ai product'],
     projects: ['tendril', 'parastoria', 'viral-host-digital', 'north-star-support-bot', 'proof-of-work'],
     evidence: ['ev-tendril-proxy', 'ev-tendril-store', 'ev-ns-review', 'ev-vhd-site'],
@@ -169,6 +192,7 @@ const capabilities: Capability[] = [
     name: 'Provider-agnostic model orchestration',
     statement: 'Normalises Anthropic, OpenAI and Gemini through one translation layer so a single runtime serves any key the user brings.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['multi-provider', 'provider agnostic', 'byok', 'bring your own key', 'model routing', 'llm proxy'],
     projects: ['tendril'],
     evidence: ['ev-tendril-proxy', 'ev-tendril-store'],
@@ -178,6 +202,7 @@ const capabilities: Capability[] = [
     name: 'Retrieval-augmented generation',
     statement: 'Builds and queries a vector index so a model answers from a corpus rather than from memory.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['rag', 'retrieval augmented generation', 'vector search', 'embeddings', 'semantic search', 'knowledge base'],
     projects: ['tendril', 'proof-of-work'],
     evidence: ['ev-tendril-proxy', 'ev-tendril-store'],
@@ -187,6 +212,7 @@ const capabilities: Capability[] = [
     name: 'Multi-agent orchestration',
     statement: 'Runs parallel agents through a plan, build, audit, fix and review pipeline in isolated git worktrees.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['multi-agent', 'agent orchestration', 'agentic', 'ai agents', 'autonomous agents'],
     projects: ['tendril'],
     evidence: ['ev-tendril-store', 'ev-tendril-cert', 'ev-tendril-unit'],
@@ -196,6 +222,7 @@ const capabilities: Capability[] = [
     name: 'React product engineering',
     statement: 'Builds shipped user interfaces in React and TypeScript, from desktop shells to embeddable widgets.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['react', 'frontend', 'front-end', 'ui development', 'user interface', 'spa', 'component library'],
     projects: ['tendril', 'parastoria', 'north-star-support-bot', 'viral-host-digital', 'proof-of-work'],
     evidence: ['ev-tendril-store', 'ev-ns-review', 'ev-ns-bundle', 'ev-parastoria-tests'],
@@ -205,6 +232,7 @@ const capabilities: Capability[] = [
     name: 'Serverless backend architecture',
     statement: 'Designs and operates production AWS backends: Lambda, API Gateway, DynamoDB, Cognito, SES, EventBridge.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['serverless', 'aws', 'backend architecture', 'cloud architecture', 'microservices', 'api development', 'cloud deployment', 'deploy to the cloud', 'rest api', 'api integration', 'backend development'],
     projects: ['viral-host-digital', 'parastoria', 'tendril'],
     evidence: ['ev-vhd-terraform', 'ev-vhd-site', 'ev-vhd-dynamo'],
@@ -214,6 +242,7 @@ const capabilities: Capability[] = [
     name: 'Infrastructure as code',
     statement: 'Defines the whole estate in Terraform and SAM, including drift reconciliation and remote state migration.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['infrastructure as code', 'iac', 'terraform', 'cloudformation', 'provisioning', 'devops'],
     projects: ['viral-host-digital', 'parastoria'],
     evidence: ['ev-vhd-terraform', 'ev-vhd-site'],
@@ -226,6 +255,7 @@ const capabilities: Capability[] = [
     // the one-word inflation this project claims to be immune to.
     statement: 'Stripe checkout, signature-verified webhooks, entitlement tiers, device-bound licensing and usage metering, across three separate products.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['stripe', 'billing', 'payments', 'subscriptions', 'monetization', 'checkout', 'saas billing'],
     projects: ['tendril', 'parastoria', 'viral-host-digital'],
     evidence: ['ev-tendril-store', 'ev-vhd-site'],
@@ -235,6 +265,7 @@ const capabilities: Capability[] = [
     name: 'End-to-end test automation',
     statement: 'Maintains real browser suites alongside unit suites, and treats a green suite that hides a dead path as a bug.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['testing', 'test', 'debug', 'debugging', 'test automation', 'e2e', 'end to end', 'playwright', 'qa', 'unit tests', 'test coverage'],
     projects: ['tendril', 'north-star-support-bot', 'parastoria'],
     evidence: ['ev-tendril-e2e', 'ev-tendril-unit', 'ev-ns-tests', 'ev-parastoria-tests'],
@@ -244,6 +275,7 @@ const capabilities: Capability[] = [
     name: 'Multi-tenant data modelling',
     statement: 'Designs tenant-scoped schemas: a 21-table DynamoDB CRM keyed on a Cognito claim, with audit logging.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['multi-tenant', 'multitenancy', 'data modeling', 'data modelling', 'schema design', 'crm'],
     projects: ['viral-host-digital'],
     evidence: ['ev-vhd-dynamo', 'ev-vhd-terraform'],
@@ -253,6 +285,7 @@ const capabilities: Capability[] = [
     name: 'Desktop packaging and store certification',
     statement: 'Signed APPX and NSIS builds with auto-update, through ten rounds of Microsoft Store certification.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['electron', 'desktop app', 'app store', 'code signing', 'packaging', 'installer'],
     projects: ['tendril'],
     evidence: ['ev-tendril-store', 'ev-tendril-cert'],
@@ -262,6 +295,7 @@ const capabilities: Capability[] = [
     name: 'Embeddable script-tag widgets',
     statement: 'Ships a self-mounting bundle with Shadow DOM isolation that drops into a site with one script tag and no build step.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['embeddable', 'widget', 'script tag', 'shadow dom', 'third-party script', 'embed'],
     projects: ['north-star-support-bot'],
     evidence: ['ev-ns-bundle', 'ev-ns-review', 'ev-ns-video'],
@@ -271,6 +305,7 @@ const capabilities: Capability[] = [
     name: 'Real-time features over WebSockets',
     statement: 'Builds live features on API Gateway WebSocket APIs and Node WS servers, including a cross-device relay.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['websocket', 'real-time', 'realtime', 'live updates', 'streaming', 'push notifications'],
     projects: ['viral-host-digital', 'parastoria', 'tendril'],
     evidence: ['ev-vhd-terraform', 'ev-parastoria-tests'],
@@ -280,6 +315,7 @@ const capabilities: Capability[] = [
     name: 'Transactional and outbound email pipelines',
     statement: 'SES inbound and outbound with DKIM, SPF and DMARC, bounce and complaint handling, and CAN-SPAM-compliant sequences.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['email', 'ses', 'transactional email', 'deliverability', 'outbound', 'email automation'],
     projects: ['viral-host-digital', 'vhd-outreach'],
     evidence: ['ev-vhd-site', 'ev-vhd-terraform'],
@@ -290,6 +326,7 @@ const capabilities: Capability[] = [
     statement:
       'Event-driven sequences that run unattended: EventBridge-scheduled steps with daily caps, suppression lists, and compliance gates, in production against real recipients.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     // 'workflow automation' is deliberately here AND on the n8n capability. A posting asking for
     // "n8n and/or Zapier for workflow automation" then matches both at full score, and the tie rule in
     // score.ts resolves an ambiguous best match to partial — which is right: the discipline is proven,
@@ -304,6 +341,7 @@ const capabilities: Capability[] = [
     name: 'Hardening public endpoints',
     statement: 'Defence in depth on a public LLM endpoint: origin-verify secret, WAF ACL and per-IP quota, plus a real git-history credential scrub.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['security', 'hardening', 'waf', 'rate limiting', 'appsec', 'incident response'],
     projects: ['viral-host-digital'],
     evidence: ['ev-vhd-site', 'ev-vhd-terraform'],
@@ -315,6 +353,7 @@ const capabilities: Capability[] = [
     statement:
       'Scopes, builds and hands off work for clients who are not engineers — small businesses and a contract accepted at 5.0 stars with no revisions requested.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['non-technical stakeholder', 'non-technical', 'client facing', 'stakeholder', 'business stakeholder', 'client communication', 'requirements gathering'],
     projects: ['north-star-support-bot', 'client-and-early-web-work', 'viral-host-digital'],
     evidence: ['ev-ns-review', 'ev-dewdrop', 'ev-sparkle'],
@@ -325,6 +364,7 @@ const capabilities: Capability[] = [
     statement:
       'Ships setup guides, architecture notes and README documentation alongside the code, including workflow definitions committed to source control rather than left inside a SaaS tenant.',
     tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['documentation', 'documented', 'maintainable', 'handover', 'technical writing', 'runbook', 'setup guide', 'knowledge transfer', 'someone else can pick up'],
     projects: ['north-star-support-bot', 'tendril', 'proof-of-work', 'client-and-early-web-work'],
     evidence: ['ev-ns-review', 'ev-ns-video', 'ev-pow-n8n'],
@@ -336,6 +376,7 @@ const capabilities: Capability[] = [
     name: 'Airtable as an application backend',
     statement: 'Uses an Airtable base as the system of record for an application, provisioned through the Meta API and read and written by automation.',
     tier: 'stretch',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['airtable', 'airtable base', 'no-code backend', 'no-code database', 'low-code database', 'spreadsheet backend'],
     projects: ['proof-of-work'],
     evidence: ['ev-pow-airtable'],
@@ -345,6 +386,7 @@ const capabilities: Capability[] = [
     name: 'Workflow automation with n8n',
     statement: 'Builds n8n workflows with branching, code nodes and an explicit error path, generated from source and committed rather than living only in the tenant. Verified to import and run in a self-hosted instance.',
     tier: 'stretch',
+    candidate: DEFAULT_CANDIDATE_ID,
     // Deliberately NOT matching 'zapier' or 'make.com'. A posting saying "n8n and/or Zapier" is
     // satisfied by n8n, and it matches on that word. A posting saying only "Zapier" should come out a
     // gap, because it is one. Adding the sibling tools here would quietly convert one tool's experience
@@ -358,6 +400,7 @@ const capabilities: Capability[] = [
     name: 'CI/CD pipelines',
     statement: 'One production pipeline in AWS CodeBuild. No repository-side CI on any project, and no pull-request workflow.',
     tier: 'stretch',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['ci/cd', 'continuous integration', 'continuous deployment', 'build pipeline', 'github actions', 'deployment automation'],
     projects: ['viral-host-digital'],
     evidence: ['ev-vhd-codebuild'],
@@ -367,6 +410,7 @@ const capabilities: Capability[] = [
     name: 'Working in an existing team codebase',
     statement: 'No record. Every project on file is greenfield and solo.',
     tier: 'stretch',
+    candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['existing codebase', 'legacy code', 'brownfield', 'code review', 'pair programming', 'team collaboration', 'agile', 'scrum', 'cross-functional'],
     projects: [],
     // Deliberately empty. This is what an unverified capability looks like in the views, and it is the
@@ -394,6 +438,7 @@ const projects: Project[] = [
     technologies: ['electron', 'react', 'typescript', 'nodejs', 'sqlite', 'sqlite-vec', 'aws-lambda', 'dynamodb', 'cognito', 'stripe', 'claude-api', 'openai-api', 'gemini', 'vitest', 'playwright', 'websocket', 'vite', 'tailwind', 'git', 'rest-api'],
     capabilities: ['cap-multi-agent', 'cap-provider-agnostic', 'cap-rag', 'cap-structured-output', 'cap-llm-integration', 'cap-frontend', 'cap-billing', 'cap-e2e-testing', 'cap-desktop-packaging', 'cap-serverless', 'cap-realtime', 'cap-documentation'],
     evidence: ['ev-tendril-store', 'ev-tendril-site', 'ev-tendril-unit', 'ev-tendril-e2e', 'ev-tendril-commits', 'ev-tendril-cert', 'ev-tendril-proxy'],
+    candidate: DEFAULT_CANDIDATE_ID,
     reviewStatus: 'ok',
     reviewReason: null,
     source: '01-tendril-readme.md',
@@ -413,6 +458,7 @@ const projects: Project[] = [
     technologies: ['electron', 'react', 'typescript', 'pixijs', 'capacitor', 'sqlite', 'astro', 'aws-sam', 'aws-lambda', 'dynamodb', 'cognito', 's3', 'ses', 'stripe', 'websocket', 'vercel-ai-sdk', 'rest-api'],
     capabilities: ['cap-frontend', 'cap-serverless', 'cap-iac', 'cap-billing', 'cap-e2e-testing', 'cap-realtime', 'cap-llm-integration'],
     evidence: ['ev-parastoria-site', 'ev-parastoria-tests', 'ev-parastoria-commits'],
+    candidate: DEFAULT_CANDIDATE_ID,
     reviewStatus: 'ok',
     reviewReason: null,
     source: '05-parastoria-notes.md',
@@ -432,6 +478,7 @@ const projects: Project[] = [
     technologies: ['astro', 'react', 'nodejs', 'python', 'aws-lambda', 'api-gateway', 'dynamodb', 's3', 'cloudfront', 'cognito', 'ses', 'eventbridge', 'waf', 'terraform', 'codebuild', 'stripe', 'gemini', 'websocket', 'rest-api'],
     capabilities: ['cap-serverless', 'cap-iac', 'cap-multi-tenant', 'cap-email-pipeline', 'cap-security-hardening', 'cap-billing', 'cap-llm-integration', 'cap-frontend', 'cap-realtime', 'cap-cicd', 'cap-client-delivery'],
     evidence: ['ev-vhd-site', 'ev-vhd-terraform', 'ev-vhd-dynamo', 'ev-vhd-codebuild'],
+    candidate: DEFAULT_CANDIDATE_ID,
     reviewStatus: 'ok',
     reviewReason: null,
     source: '06-vhd-terraform-summary.txt',
@@ -451,6 +498,7 @@ const projects: Project[] = [
     technologies: ['preact', 'typescript', 'vite', 'openrouter', 'claude-api', 'openai-api', 'vitest', 'rest-api'],
     capabilities: ['cap-structured-output', 'cap-llm-integration', 'cap-embeddable', 'cap-frontend', 'cap-e2e-testing', 'cap-client-delivery', 'cap-documentation'],
     evidence: ['ev-ns-review', 'ev-ns-tests', 'ev-ns-bundle', 'ev-ns-video'],
+    candidate: DEFAULT_CANDIDATE_ID,
     reviewStatus: 'ok',
     reviewReason: null,
     source: '07-north-star-case-study.md',
@@ -473,6 +521,7 @@ const projects: Project[] = [
     technologies: ['brevo', 'ses', 'aws-lambda', 'eventbridge', 'cloudfront', 'nodejs', 'terraform'],
     capabilities: ['cap-scheduled-automation', 'cap-email-pipeline', 'cap-serverless'],
     evidence: ['ev-vhd-terraform', 'ev-vhd-site'],
+    candidate: DEFAULT_CANDIDATE_ID,
     reviewStatus: 'ok',
     reviewReason: null,
     source: '12-vhd-outreach.md',
@@ -492,6 +541,7 @@ const projects: Project[] = [
     technologies: ['astro', 'react', 'nodejs', 'aws-lambda', 's3', 'cloudfront', 'ses', 'terraform', 'python'],
     capabilities: ['cap-frontend', 'cap-serverless', 'cap-iac', 'cap-email-pipeline', 'cap-client-delivery', 'cap-documentation'],
     evidence: ['ev-dewdrop', 'ev-sparkle'],
+    candidate: DEFAULT_CANDIDATE_ID,
     reviewStatus: 'ok',
     reviewReason: null,
     source: '06-vhd-terraform-summary.txt',
@@ -511,6 +561,7 @@ const projects: Project[] = [
     technologies: ['react', 'typescript', 'vite', 'airtable', 'n8n', 'openrouter', 'claude-api', 'vitest', 'nodejs', 'rest-api'],
     capabilities: ['cap-airtable-backend', 'cap-n8n-automation', 'cap-structured-output', 'cap-llm-integration', 'cap-rag', 'cap-frontend', 'cap-documentation'],
     evidence: ['ev-pow-airtable', 'ev-pow-n8n'],
+    candidate: DEFAULT_CANDIDATE_ID,
     reviewStatus: 'ok',
     reviewReason: null,
     source: 'this repository',
@@ -529,9 +580,25 @@ function withReverseLinks(snapshot: Snapshot): Snapshot {
   return { ...snapshot, technologies: [...index.values()] };
 }
 
+/** Fill each Candidate's link arrays from the rows stamped with its id. Same mirror, other direction. */
+function withCandidateLinks(snapshot: Snapshot): Snapshot {
+  const index = new Map(
+    snapshot.candidates.map((c) => [
+      c.id,
+      { ...c, projects: [] as string[], capabilities: [] as string[], evidence: [] as string[] },
+    ]),
+  );
+  for (const project of snapshot.projects) index.get(project.candidate)?.projects.push(project.id);
+  for (const capability of snapshot.capabilities) index.get(capability.candidate)?.capabilities.push(capability.id);
+  for (const receipt of snapshot.evidence) index.get(receipt.candidate)?.evidence.push(receipt.id);
+  return { ...snapshot, candidates: [...index.values()] };
+}
+
 export function seedSnapshot(): Snapshot {
   // Deep-copied on every call so a mutating store can never corrupt the seed for the next reader.
-  return withReverseLinks(
-    structuredClone({ projects, technologies, capabilities, evidence, roles: [] }) as Snapshot,
+  return withCandidateLinks(
+    withReverseLinks(
+      structuredClone({ candidates, projects, technologies, capabilities, evidence, roles: [] }) as Snapshot,
+    ),
   );
 }

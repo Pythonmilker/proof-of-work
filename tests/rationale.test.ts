@@ -13,6 +13,7 @@ import type { Evidence, Project } from '@/store/types';
 
 const project: Project = {
   id: 'north-star-support-bot',
+  candidate: 'candidate-test',
   name: 'North Star Support Bot',
   slug: 'north-star-support-bot',
   role: 'Contract developer',
@@ -32,6 +33,7 @@ const project: Project = {
 
 const evidence: Evidence = {
   id: 'ev',
+  candidate: 'candidate-test',
   label: 'Passing tests',
   kind: 'test-count',
   value: '359 across 19 files',

@@ -1,7 +1,7 @@
 /**
  * The Airtable schema against the TypeScript types.
  *
- * Two definitions of the same six tables, in two languages, and nothing in either one stops them
+ * Two definitions of the same seven tables, in two languages, and nothing in either one stops them
  * drifting. The failure mode is quiet and annoying: a field renamed in `types.ts` still reads fine in
  * the local store and comes back `undefined` from Airtable, so the app works in demo mode and loses a
  * column the moment someone connects a real base.
@@ -16,9 +16,21 @@ import { seedSnapshot } from '@/store/seed';
 
 /** TypeScript property → Airtable field name. `null` means the property is not stored in Airtable. */
 const MAPPING: Record<string, Record<string, string | null>> = {
+  Candidates: {
+    id: 'Key',
+    name: 'Name',
+    contact: 'Contact',
+    source: 'Source',
+    ingestedAt: 'Ingested At',
+    // The reverse sides of the per-row Candidate links. Airtable maintains them; the type carries them.
+    projects: 'Projects',
+    capabilities: 'Capabilities',
+    evidence: 'Evidence',
+  },
   Projects: {
     id: 'Key',
     slug: 'Key',
+    candidate: 'Candidate',
     name: 'Name',
     role: 'Role',
     started: 'Started',
@@ -46,6 +58,7 @@ const MAPPING: Record<string, Record<string, string | null>> = {
   },
   Capabilities: {
     id: 'Key',
+    candidate: 'Candidate',
     name: 'Name',
     statement: 'Statement',
     tier: 'Tier',
@@ -55,6 +68,7 @@ const MAPPING: Record<string, Record<string, string | null>> = {
   },
   Evidence: {
     id: 'Key',
+    candidate: 'Candidate',
     label: 'Label',
     kind: 'Kind',
     value: 'Value',
@@ -79,6 +93,7 @@ const MAPPING: Record<string, Record<string, string | null>> = {
   },
   Results: {
     requirementId: 'Key',
+    candidate: 'Candidate',
     requirementText: 'Requirement',
     kind: 'Kind',
     category: 'Category',
@@ -118,12 +133,13 @@ const DERIVED: Record<string, string> = {
  */
 const REVERSE_ONLY = new Set([
   'Evidence.Capabilities',
-  // Results links out to four tables, so each of them gains a Results field. Nothing traverses back
+  // Results links out to five tables, so each of them gains a Results field. Nothing traverses back
   // that way: the report is always read from the Role down.
   'Technologies.Results',
   'Capabilities.Results',
   'Projects.Results',
   'Evidence.Results',
+  'Candidates.Results',
 ]);
 
 /**
@@ -140,13 +156,16 @@ function airtableFieldsFor(table: string): Set<string> {
 }
 
 describe('every table in the type layer exists in the base', () => {
-  it('has six tables, small enough to read in one screenshot', () => {
+  it('has seven tables, small enough to read in one screenshot', () => {
     // It was five, and the fifth-table rule was costing more than it saved: results lived as escaped
     // JSON in a long-text field to avoid a sixth table, which disabled filtering, grouping, colouring
     // and Interfaces on the one table holding the output. Airtable renders tables as horizontal tabs,
-    // so six versus five is visually identical. The real constraint is legibility, not arithmetic.
-    expect(TABLES).toHaveLength(6);
+    // so the count barely shows. The real constraint is legibility, not arithmetic — and Candidates
+    // earned the seventh tab the same way Results earned the sixth: a person is real structure, not
+    // a JSON blob dodging a tab.
+    expect(TABLES).toHaveLength(7);
     expect(TABLES.map((t) => t.name).sort()).toEqual([
+      'Candidates',
       'Capabilities',
       'Evidence',
       'Projects',

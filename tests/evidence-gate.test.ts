@@ -18,6 +18,7 @@ const requirement: Requirement = { id: 'r1', text: 'Widget wrangling', kind: 're
 function project(id: string, evidence: string[]): Project {
   return {
     id,
+    candidate: 'candidate-test',
     name: id,
     slug: id,
     role: 'dev',
@@ -37,11 +38,11 @@ function project(id: string, evidence: string[]): Project {
 }
 
 function receipt(id: string, projects: string[]): Evidence {
-  return { id, label: id, kind: 'artifact', value: 'v', url: null, verifiedOn: '2026-01-01', projects };
+  return { id, candidate: 'candidate-test', label: id, kind: 'artifact', value: 'v', url: null, verifiedOn: '2026-01-01', projects };
 }
 
 function capability(id: string, tier: Capability['tier'], evidence: string[], projects: string[]): Capability {
-  return { id, name: id, statement: '', tier, matchTerms: [], projects, evidence };
+  return { id, candidate: 'candidate-test', name: id, statement: '', tier, matchTerms: [], projects, evidence };
 }
 
 function technology(id: string, projects: string[]): Technology {
@@ -49,7 +50,7 @@ function technology(id: string, projects: string[]): Technology {
 }
 
 function snapshotWith(parts: Partial<Snapshot>): Snapshot {
-  return { projects: [], technologies: [], capabilities: [], evidence: [], roles: [], ...parts };
+  return { candidates: [], projects: [], technologies: [], capabilities: [], evidence: [], roles: [], ...parts };
 }
 
 const perfect = (kind: 'technology' | 'capability', id: string) => ({

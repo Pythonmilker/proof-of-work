@@ -18,7 +18,7 @@
  * quietly not be there.
  */
 
-import type { Project, ProjectStatus, ReviewStatus } from '../store/types';
+import { DEFAULT_CANDIDATE_ID, type Project, type ProjectStatus, type ReviewStatus } from '../store/types';
 
 export interface ExtractedProject {
   name: string;
@@ -213,6 +213,7 @@ export function toProject(
 
   return {
     id: slugify(extracted.name),
+    candidate: DEFAULT_CANDIDATE_ID,
     name: extracted.name,
     slug: slugify(extracted.name),
     role: extracted.role,
@@ -247,6 +248,7 @@ export function toReviewStub(
   const reviewStatus: ReviewStatus = 'needs-review';
   return {
     id: slugify(label),
+    candidate: DEFAULT_CANDIDATE_ID,
     name: label,
     slug: slugify(label),
     role: '',

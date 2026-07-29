@@ -1,10 +1,11 @@
 /**
- * The six tables.
+ * The seven tables.
  *
  * The count is a design constraint, but the rule is legibility, not arithmetic — every table must earn
  * its tab, and structure must never hide inside a long-text field to hold the count down. Results was
  * the test case: it began as escaped JSON on Roles and became the sixth table, because a JSON blob
- * disabled filtering, grouping and Interfaces on the one table holding the output.
+ * disabled filtering, grouping and Interfaces on the one table holding the output. Candidates is the
+ * seventh, for the same reason: a person is real structure, not a property dodging a tab.
  *
  * These types are the contract that the local JSON store and the Airtable adapter both satisfy, and the
  * shape the n8n workflows read and write. Change a field here and you owe an edit in three places:
@@ -19,6 +20,36 @@ export interface Provenance {
   ingestedAt: string;
 }
 
+/**
+ * The person a record belongs to. Projects, Capabilities and Evidence are owned per-candidate;
+ * Technologies and Roles stay global — React is React for everyone, and a posting is scoreable by
+ * anyone. Results rows are candidate × role × requirement.
+ */
+export interface Candidate {
+  /** Slug, e.g. `candidate-joel`. */
+  id: string;
+  name: string;
+  /** As extracted from the source. May be empty. */
+  contact: string;
+  /** Resume filename, or `seed` for the bundled record. */
+  source: string;
+  /** ISO date the candidate was written. */
+  ingestedAt: string;
+  /** Project ids this candidate owns. */
+  projects: string[];
+  /** Capability ids. */
+  capabilities: string[];
+  /** Evidence ids. */
+  evidence: string[];
+}
+
+/**
+ * The one candidate the v3.0 seat is wired to. The seed wraps the whole existing record in this
+ * candidate, and the pipeline stamps it on everything it writes until the resume intake path lands
+ * and candidate ids start arriving from outside.
+ */
+export const DEFAULT_CANDIDATE_ID = 'candidate-joel';
+
 export type ProjectStatus = 'shipped' | 'live' | 'delivered' | 'in-development';
 
 /**
@@ -29,6 +60,8 @@ export type ReviewStatus = 'ok' | 'needs-review';
 
 export interface Project extends Provenance {
   id: string;
+  /** Candidate id — who owns this row. */
+  candidate: string;
   name: string;
   slug: string;
   role: string;
@@ -83,6 +116,8 @@ export type CapabilityTier = 'proven' | 'stretch';
 
 export interface Capability {
   id: string;
+  /** Candidate id — who owns this claim. */
+  candidate: string;
   name: string;
   /** One line, written to be read aloud in a fit report. */
   statement: string;
@@ -111,6 +146,8 @@ export type EvidenceKind =
 
 export interface Evidence {
   id: string;
+  /** Candidate id — whose receipt this is. */
+  candidate: string;
   label: string;
   kind: EvidenceKind;
   /** The receipt itself: an id, a count, a URL, a rating. */
@@ -145,6 +182,8 @@ export type CoverageStatus = 'proven' | 'partial' | 'gap';
 /** One row of the fit report. Everything here except `rationale` is computed in code. */
 export interface RequirementResult {
   requirementId: string;
+  /** Candidate id — a Results row is candidate × role × requirement, keyed `{candidate}-{role}-req-N`. */
+  candidate: string;
   /** Denormalised so a Results row is readable on its own in Airtable, without following the link. */
   requirementText: string;
   kind: RequirementKind;
@@ -180,8 +219,9 @@ export interface Role extends Provenance {
   model: string;
 }
 
-/** Everything a store holds. The Airtable adapter maps this 1:1 onto six tables. */
+/** Everything a store holds. The Airtable adapter maps this 1:1 onto seven tables. */
 export interface Snapshot {
+  candidates: Candidate[];
   projects: Project[];
   technologies: Technology[];
   capabilities: Capability[];
@@ -191,6 +231,7 @@ export interface Snapshot {
 
 export interface Store {
   read(): Promise<Snapshot>;
+  upsertCandidate(candidate: Candidate): Promise<void>;
   upsertProject(project: Project): Promise<void>;
   upsertEvidence(evidence: Evidence): Promise<void>;
   /**
@@ -208,6 +249,7 @@ export interface Store {
 }
 
 export const EMPTY_SNAPSHOT: Snapshot = {
+  candidates: [],
   projects: [],
   technologies: [],
   capabilities: [],

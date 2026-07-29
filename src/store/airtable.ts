@@ -18,6 +18,7 @@
  */
 
 import type {
+  Candidate,
   Capability,
   Evidence,
   Project,
@@ -36,6 +37,7 @@ export interface AirtableConfig {
 }
 
 export const TABLES = {
+  candidates: 'Candidates',
   projects: 'Projects',
   technologies: 'Technologies',
   capabilities: 'Capabilities',
@@ -131,7 +133,8 @@ export class AirtableStore implements Store {
   }
 
   async read(): Promise<Snapshot> {
-    const [projects, technologies, capabilities, evidence, roles, results] = await Promise.all([
+    const [candidates, projects, technologies, capabilities, evidence, roles, results] = await Promise.all([
+      this.listAll(TABLES.candidates),
       this.listAll(TABLES.projects),
       this.listAll(TABLES.technologies),
       this.listAll(TABLES.capabilities),
@@ -142,7 +145,7 @@ export class AirtableStore implements Store {
 
     this.keyByRecord = new Map();
     this.recordByKey = new Map();
-    for (const record of [...projects, ...technologies, ...capabilities, ...evidence, ...roles, ...results]) {
+    for (const record of [...candidates, ...projects, ...technologies, ...capabilities, ...evidence, ...roles, ...results]) {
       const key = str(record.fields, 'Key');
       if (!key) continue;
       this.keyByRecord.set(record.id, key);
@@ -156,6 +159,18 @@ export class AirtableStore implements Store {
         .filter((k): k is string => Boolean(k));
 
     return {
+      candidates: candidates.map(
+        (r): Candidate => ({
+          id: str(r.fields, 'Key'),
+          name: str(r.fields, 'Name'),
+          contact: str(r.fields, 'Contact'),
+          source: str(r.fields, 'Source'),
+          ingestedAt: str(r.fields, 'Ingested At'),
+          projects: links(r.fields, 'Projects'),
+          capabilities: links(r.fields, 'Capabilities'),
+          evidence: links(r.fields, 'Evidence'),
+        }),
+      ),
       projects: projects.map((r): Project => {
         const metrics: Project['metrics'] = {};
         const loc = num(r.fields, 'LOC');
@@ -169,6 +184,7 @@ export class AirtableStore implements Store {
 
         return {
           id: str(r.fields, 'Key'),
+          candidate: links(r.fields, 'Candidate')[0] ?? '',
           name: str(r.fields, 'Name'),
           slug: str(r.fields, 'Key'),
           role: str(r.fields, 'Role'),
@@ -198,6 +214,7 @@ export class AirtableStore implements Store {
       capabilities: capabilities.map(
         (r): Capability => ({
           id: str(r.fields, 'Key'),
+          candidate: links(r.fields, 'Candidate')[0] ?? '',
           name: str(r.fields, 'Name'),
           statement: str(r.fields, 'Statement'),
           tier: (str(r.fields, 'Tier') || 'stretch') as Capability['tier'],
@@ -209,6 +226,7 @@ export class AirtableStore implements Store {
       evidence: evidence.map(
         (r): Evidence => ({
           id: str(r.fields, 'Key'),
+          candidate: links(r.fields, 'Candidate')[0] ?? '',
           label: str(r.fields, 'Label'),
           kind: (str(r.fields, 'Kind') || 'artifact') as Evidence['kind'],
           value: str(r.fields, 'Value'),
@@ -229,8 +247,20 @@ export class AirtableStore implements Store {
           .filter((row) => links(row.fields, 'Role').includes(roleKey))
           .sort((a, b) => str(a.fields, 'Key').localeCompare(str(b.fields, 'Key'), undefined, { numeric: true }));
 
+        // A Results Key is `{candidateKey}-{roleKey}-req-N`; the requirement id is what is left once
+        // both prefixes come off. The candidate prefix is stripped by the row's own Candidate link
+        // rather than by position, so a slug containing a hyphen cannot shift the split.
+        const requirementIdOf = (row: AirtableRecord): string => {
+          const key = str(row.fields, 'Key');
+          const candidateKey = links(row.fields, 'Candidate')[0] ?? '';
+          let rest = key;
+          if (candidateKey && rest.startsWith(`${candidateKey}-`)) rest = rest.slice(candidateKey.length + 1);
+          if (rest.startsWith(`${roleKey}-`)) rest = rest.slice(roleKey.length + 1);
+          return rest || key;
+        };
+
         const requirements: Requirement[] = mine.map((row) => ({
-          id: str(row.fields, 'Key').slice(roleKey.length + 1) || str(row.fields, 'Key'),
+          id: requirementIdOf(row),
           text: str(row.fields, 'Requirement'),
           kind: (str(row.fields, 'Kind') || 'required') as Requirement['kind'],
           category: (str(row.fields, 'Category') || 'process') as Requirement['category'],
@@ -238,6 +268,7 @@ export class AirtableStore implements Store {
 
         const roleResults: RequirementResult[] = mine.map((row, i) => ({
           requirementId: requirements[i]?.id ?? '',
+          candidate: links(row.fields, 'Candidate')[0] ?? '',
           requirementText: str(row.fields, 'Requirement'),
           kind: (str(row.fields, 'Kind') || 'required') as Requirement['kind'],
           category: (str(row.fields, 'Category') || 'process') as Requirement['category'],
@@ -294,8 +325,21 @@ export class AirtableStore implements Store {
     }
   }
 
+  async upsertCandidate(candidate: Candidate): Promise<void> {
+    await this.upsertByKey(TABLES.candidates, candidate.id, {
+      Name: candidate.name,
+      Contact: candidate.contact,
+      Source: candidate.source,
+      'Ingested At': candidate.ingestedAt,
+      Projects: this.refs(candidate.projects),
+      Capabilities: this.refs(candidate.capabilities),
+      Evidence: this.refs(candidate.evidence),
+    });
+  }
+
   async upsertProject(project: Project): Promise<void> {
     await this.upsertByKey(TABLES.projects, project.id, {
+      Candidate: this.refs([project.candidate]),
       Name: project.name,
       Role: project.role,
       Started: project.started,
@@ -316,6 +360,7 @@ export class AirtableStore implements Store {
 
   async upsertEvidence(evidence: Evidence): Promise<void> {
     await this.upsertByKey(TABLES.evidence, evidence.id, {
+      Candidate: this.refs([evidence.candidate]),
       Label: evidence.label,
       Kind: evidence.kind,
       Value: evidence.value,
@@ -335,6 +380,7 @@ export class AirtableStore implements Store {
 
   async upsertCapability(capability: Capability): Promise<void> {
     await this.upsertByKey(TABLES.capabilities, capability.id, {
+      Candidate: this.refs([capability.candidate]),
       Name: capability.name,
       Statement: capability.statement,
       Tier: capability.tier,
@@ -381,7 +427,9 @@ export class AirtableStore implements Store {
     });
 
     for (const result of role.results) {
-      await this.upsertByKey(TABLES.results, `${role.id}-${result.requirementId}`, {
+      // Results rows are candidate × role × requirement, so the candidate leads the Key.
+      await this.upsertByKey(TABLES.results, `${result.candidate}-${role.id}-${result.requirementId}`, {
+        Candidate: this.refs([result.candidate]),
         Requirement: result.requirementText,
         Kind: result.kind,
         Category: result.category,

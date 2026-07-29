@@ -254,8 +254,12 @@ describe('the extract workflow', () => {
   it('branches on validity and routes failures to Needs Review', () => {
     // The error branch is the design decision worth defending: nothing is dropped, so the output cannot
     // look complete while quietly missing a record.
-    const gate = extract.nodes.find((n) => n.type === 'n8n-nodes-base.if');
+    //
+    // By name, not by type: the token gate added a second IF node ahead of this one, and the first
+    // IF in the array is now the auth check, whose false branch legitimately ends at Unauthorized.
+    const gate = extract.nodes.find((n) => n.name === 'Usable record?');
     expect(gate).toBeDefined();
+    expect(gate?.type).toBe('n8n-nodes-base.if');
     if (!gate) return;
 
     const outputs = extract.connections[gate.name]?.main ?? [];
@@ -326,5 +330,54 @@ describe('the match workflow', () => {
     const order = matchRole.nodes.map((n) => n.name);
     expect(order.indexOf('Retrieve and score')).toBeLessThan(order.indexOf('Write rationales'));
     expect(matchRole.connections['Retrieve and score']?.main[0]?.[0]?.node).toBe('Write rationales');
+  });
+});
+
+/**
+ * The webhook auth gate (docs/DESIGN.md §v3.7).
+ *
+ * Same anti-silent-skip shape as the models-array test above: each workflow must CONTRIBUTE guard
+ * assertions, because a filter that matches no node reads green while the thing it names goes
+ * unchecked. A workflow with no guard node is a failure here, not a skip.
+ */
+describe('the webhook auth guard', () => {
+  it('checks the shared token in a Code node in both workflows, fail closed', () => {
+    const checkedPerFile = new Map<string, number>();
+
+    for (const { file, wf } of both) {
+      for (const n of wf.nodes.filter((x) => x.type === 'n8n-nodes-base.code')) {
+        const source = String(n.parameters['jsCode']);
+        if (!source.includes('x-pow-app-token')) continue;
+        expect(source, `${file} :: ${n.name}`).toContain('POW_APP_TOKEN');
+        // Fail closed: an unset token on the n8n side must reject with the reason named, never
+        // fall through open.
+        expect(source, `${file} :: ${n.name}`).toContain('POW_APP_TOKEN not configured');
+        checkedPerFile.set(file, (checkedPerFile.get(file) ?? 0) + 1);
+      }
+    }
+
+    // The assertion that makes the rest of them mean something.
+    expect(checkedPerFile.get('extract-project.json') ?? 0).toBeGreaterThan(0);
+    expect(checkedPerFile.get('match-role.json') ?? 0).toBeGreaterThan(0);
+  });
+
+  it('sits immediately after the webhook trigger, before any model call or write', () => {
+    for (const { file, wf } of both) {
+      const trigger = wf.nodes.find((n) => n.type === 'n8n-nodes-base.webhook');
+      expect(trigger, `${file} has no webhook trigger`).toBeDefined();
+      if (!trigger) continue;
+      expect(wf.connections[trigger.name]?.main[0]?.[0]?.node, file).toBe('Verify app token');
+    }
+  });
+
+  it('routes a rejected token to a 401 respond node in both workflows', () => {
+    for (const { file, wf } of both) {
+      const unauthorized = wf.nodes.find((n) => n.name === 'Unauthorized');
+      expect(unauthorized, `${file} has no Unauthorized respond node`).toBeDefined();
+      expect(unauthorized?.type, file).toBe('n8n-nodes-base.respondToWebhook');
+      expect((unauthorized?.parameters['options'] as Record<string, unknown>)?.['responseCode'], file).toBe(401);
+      expect(String(unauthorized?.parameters['responseBody']), file).toContain('unauthorized');
+      expect(String(unauthorized?.parameters['responseBody']), file).toContain('authDetail');
+    }
   });
 });

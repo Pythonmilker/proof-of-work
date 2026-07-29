@@ -1,5 +1,5 @@
 /**
- * The local store — same six tables, no account required.
+ * The local store — same seven tables, no account required.
  *
  * This exists so the whole thing runs for someone who has not signed up for anything. That is not a
  * convenience: a reviewer who has to create an Airtable account before they can see the demo mostly does
@@ -11,7 +11,7 @@
  */
 
 import { seedSnapshot } from './seed';
-import type { Capability, Evidence, Project, Role, Snapshot, Store, Technology } from './types';
+import type { Candidate, Capability, Evidence, Project, Role, Snapshot, Store, Technology } from './types';
 
 export interface Persistence {
   load(): Snapshot | null;
@@ -42,7 +42,9 @@ export function localStoragePersistence(storage: Storage): Persistence {
         const raw = storage.getItem(STORAGE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as Partial<Snapshot>;
-        if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.technologies)) return null;
+        // `candidates` is checked too, so a pre-candidates payload resets to the seed instead of
+        // white-screening on a table the session never wrote.
+        if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.technologies) || !Array.isArray(parsed.candidates)) return null;
         return parsed as Snapshot;
       } catch {
         return null;
@@ -80,6 +82,11 @@ export class LocalStore implements Store {
   async read(): Promise<Snapshot> {
     // A copy, so a caller mutating what it reads cannot rewrite the store behind its own back.
     return structuredClone(this.snapshot);
+  }
+
+  async upsertCandidate(candidate: Candidate): Promise<void> {
+    this.snapshot = { ...this.snapshot, candidates: upsertById(this.snapshot.candidates, candidate) };
+    this.flush();
   }
 
   async upsertProject(project: Project): Promise<void> {

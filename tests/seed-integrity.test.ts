@@ -178,6 +178,26 @@ describe('referential integrity', () => {
     }
   });
 
+  it('stamps every project, capability and evidence row with a candidate that exists', () => {
+    const candidateIds = new Set(snapshot.candidates.map((c) => c.id));
+    for (const p of snapshot.projects) expect(candidateIds, `${p.id}.candidate -> ${p.candidate}`).toContain(p.candidate);
+    for (const c of snapshot.capabilities) expect(candidateIds, `${c.id}.candidate -> ${c.candidate}`).toContain(c.candidate);
+    for (const e of snapshot.evidence) expect(candidateIds, `${e.id}.candidate -> ${e.candidate}`).toContain(e.candidate);
+  });
+
+  it("mirrors candidate-joel's link arrays over every row, with no orphans", () => {
+    // Both directions at once: sorted equality fails on a link pointing at a row that does not exist
+    // AND on a row the candidate's arrays quietly miss. The seed wraps the whole record in one person,
+    // so an orphaned row here is a row the recruiter seat would never see.
+    const joel = snapshot.candidates.find((c) => c.id === 'candidate-joel');
+    expect(joel, 'candidate-joel is missing from the seed').toBeDefined();
+    if (!joel) return;
+
+    expect([...joel.projects].sort()).toEqual(snapshot.projects.map((p) => p.id).sort());
+    expect([...joel.capabilities].sort()).toEqual(snapshot.capabilities.map((c) => c.id).sort());
+    expect([...joel.evidence].sort()).toEqual(snapshot.evidence.map((e) => e.id).sort());
+  });
+
   it('keeps at least one capability with no evidence, so the gate stays visible', () => {
     // Not a bug being tolerated. An unverified row is what the evidence gate looks like in the views,
     // and removing the last one would make the rule invisible to anyone reading the screenshots.

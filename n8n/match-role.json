@@ -34,12 +34,91 @@
       }
     },
     {
+      "id": "3b15b88a-0000-4000-8000-3b15b88a0000",
+      "name": "Verify app token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        320
+      ],
+      "parameters": {
+        "jsCode": "// THE AUTH GATE. Nothing downstream runs — no model call, no Airtable read or write — until the\n// caller proves it holds the shared app token (docs/DESIGN.md §v3.7).\n//\n// FAIL CLOSED. If POW_APP_TOKEN is not set in the n8n environment, every request is rejected with the\n// reason named, rather than waved through. An auth check that disables itself when unconfigured is\n// exactly the silent fallback this repo exists to argue against.\n//\n// The webhook item is passed through unchanged apart from the verdict fields, so the happy path keeps\n// reading body and headers exactly as it did before the gate existed.\nconst item = $input.first().json;\n\nconst expected = typeof $env.POW_APP_TOKEN === 'string' ? $env.POW_APP_TOKEN : '';\n// HTTP header names arrive lower-cased.\nconst presented = String((item.headers || {})['x-pow-app-token'] || '');\n\n// Constant-time comparison: every character is inspected regardless of where the first mismatch sits,\n// so response timing does not leak how much of a guess was right.\nlet diff = expected.length === presented.length ? 0 : 1;\nfor (let i = 0; i < expected.length; i += 1) {\n  diff |= expected.charCodeAt(i) ^ (presented.charCodeAt(i) || 0);\n}\n\nconst configured = expected.length > 0;\nconst authorized = configured && presented.length > 0 && diff === 0;\n\nreturn [{\n  json: {\n    ...item,\n    authorized,\n    authDetail: authorized\n      ? ''\n      : configured\n        ? 'missing or invalid x-pow-app-token header'\n        : 'POW_APP_TOKEN not configured',\n  },\n}];"
+      }
+    },
+    {
+      "id": "2b9e6588-0000-4000-8000-2b9e65880000",
+      "name": "Token accepted?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        420,
+        320
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "d4bbb1e8-0000-4000-8000-d4bbb1e80000",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "690f8193-0000-4000-8000-690f81930000",
+      "name": "Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        640,
+        520
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  error: 'unauthorized',\n  detail: $('Verify app token').first().json.authDetail\n} }}",
+        "options": {
+          "responseCode": 401
+        }
+      }
+    },
+    {
+      "id": "d74bf095-0000-4000-8000-d74bf0950000",
+      "name": "Auth note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        140,
+        60
+      ],
+      "parameters": {
+        "width": 480,
+        "height": 200,
+        "content": "### The token gate\n\nEvery request must carry the shared app token in an `x-pow-app-token` header, compared\nconstant-time against `POW_APP_TOKEN` from the n8n environment.\n\n**It fails closed.** If the env var is unset, every request is rejected — 401 with the reason\nnamed — never waved through. Someone who extracts the webhook URL from a bundle gets a door\nthat does not open."
+      }
+    },
+    {
       "id": "a5568fa1-0000-4000-8000-a5568fa10000",
       "name": "Parse the posting",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        200,
+        640,
         320
       ],
       "parameters": {
@@ -68,7 +147,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        440,
+        880,
         120
       ],
       "parameters": {
@@ -101,7 +180,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        440,
+        880,
         260
       ],
       "parameters": {
@@ -134,7 +213,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        440,
+        880,
         400
       ],
       "parameters": {
@@ -167,7 +246,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        440,
+        880,
         540
       ],
       "parameters": {
@@ -200,7 +279,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        1120,
         320
       ],
       "parameters": {
@@ -213,7 +292,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        900,
+        1340,
         320
       ],
       "parameters": {
@@ -226,7 +305,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1120,
+        1560,
         320
       ],
       "parameters": {
@@ -255,7 +334,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1340,
+        1780,
         320
       ],
       "parameters": {
@@ -268,7 +347,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1560,
+        2000,
         320
       ],
       "parameters": {
@@ -281,7 +360,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        1780,
+        2220,
         320
       ],
       "parameters": {
@@ -320,7 +399,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2000,
+        2440,
         420
       ],
       "parameters": {
@@ -333,7 +412,7 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        2220,
+        2660,
         420
       ],
       "parameters": {
@@ -372,7 +451,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        2000,
+        2440,
         200
       ],
       "parameters": {
@@ -389,7 +468,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        860,
+        1300,
         560
       ],
       "parameters": {
@@ -404,7 +483,36 @@
       "main": [
         [
           {
+            "node": "Verify app token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify app token": {
+      "main": [
+        [
+          {
+            "node": "Token accepted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token accepted?": {
+      "main": [
+        [
+          {
             "node": "Parse the posting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unauthorized",
             "type": "main",
             "index": 0
           }

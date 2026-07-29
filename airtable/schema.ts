@@ -1,10 +1,12 @@
 /**
  * The Airtable base, defined once.
  *
- * Six tables, small enough to read in one screenshot. It was five, and the sixth is a correction worth
+ * Seven tables, small enough to read in one screenshot. It was five, and the sixth is a correction worth
  * recording: `Roles` used to hold its requirements and results as escaped JSON inside two long-text
  * fields, to protect a self-imposed five-table rule whose stated cost was "every extra table costs a
- * column in the screenshot".
+ * column in the screenshot". `Candidates` is the seventh, added when the seat turned around for v3:
+ * a person is real structure, not a JSON blob dodging a tab, and the same legibility rule that earned
+ * Results its own tab earns one here.
  *
  * That reasoning was wrong twice. Airtable renders tables as horizontal tabs, so six versus five is
  * visually identical. And JSON in a long-text field disables everything Airtable is for: you cannot
@@ -73,6 +75,21 @@ const number = (name: string, description?: string): FieldSpec => ({
 });
 
 export const TABLES: TableSpec[] = [
+  {
+    name: 'Candidates',
+    description: 'One row per person. Projects, Capabilities, Evidence and Results all hang off this.',
+    fields: [
+      { name: 'Name', type: 'singleLineText' },
+      KEY_FIELD,
+      {
+        name: 'Contact',
+        type: 'singleLineText',
+        description: 'As extracted from the source. May be empty.',
+      },
+      { name: 'Source', type: 'singleLineText', description: 'Resume filename, or "seed" for the bundled record.' },
+      { name: 'Ingested At', type: 'singleLineText' },
+    ],
+  },
   {
     name: 'Projects',
     description: 'One row per piece of work. Metrics only ever come from a real artifact.',
@@ -212,6 +229,18 @@ export const TABLES: TableSpec[] = [
  * wrong in the base.
  */
 export const LINKS: LinkSpec[] = [
+  // Ownership. Declared from the owned row's side; Airtable creates the per-candidate rollup fields
+  // (Candidates.Projects and friends) as the automatic reverse.
+  { table: 'Projects', field: 'Candidate', linkedTable: 'Candidates' },
+  { table: 'Capabilities', field: 'Candidate', linkedTable: 'Candidates' },
+  { table: 'Evidence', field: 'Candidate', linkedTable: 'Candidates' },
+  {
+    table: 'Results',
+    field: 'Candidate',
+    linkedTable: 'Candidates',
+    description: 'One row per candidate per role per requirement. The Key leads with the candidate.',
+  },
+
   { table: 'Projects', field: 'Technologies', linkedTable: 'Technologies' },
   { table: 'Projects', field: 'Capabilities', linkedTable: 'Capabilities' },
   { table: 'Projects', field: 'Evidence', linkedTable: 'Evidence' },

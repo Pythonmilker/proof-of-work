@@ -12,16 +12,17 @@
 
 import { embed, type Vector } from '../openrouter/embeddings';
 import type { LlmOptions } from '../openrouter/client';
-import type {
-  Capability,
-  Evidence,
-  Project,
-  Requirement,
-  RequirementResult,
-  Role,
-  Snapshot,
-  Store,
-  Technology,
+import {
+  DEFAULT_CANDIDATE_ID,
+  type Capability,
+  type Evidence,
+  type Project,
+  type Requirement,
+  type RequirementResult,
+  type Role,
+  type Snapshot,
+  type Store,
+  type Technology,
 } from '../store/types';
 import { extract } from './extract';
 import { parseRole } from './jd';
@@ -155,6 +156,7 @@ export async function ingest(
 
   const createdEvidence: Evidence[] = validation.value.evidence.map((e) => ({
     id: evidenceId(project.slug, e.label, e.value),
+    candidate: DEFAULT_CANDIDATE_ID,
     label: e.label,
     kind: e.kind as Evidence['kind'],
     value: e.value,
@@ -311,6 +313,7 @@ export async function matchRole(
 
     results.push({
       requirementId: requirement.id,
+      candidate: DEFAULT_CANDIDATE_ID,
       requirementText: requirement.text,
       kind: requirement.kind,
       category: requirement.category,

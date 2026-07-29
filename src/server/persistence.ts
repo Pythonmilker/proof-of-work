@@ -22,7 +22,9 @@ export function filePersistence(path: string): Persistence {
       try {
         if (!existsSync(path)) return null;
         const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<Snapshot>;
-        if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.technologies)) return null;
+        // `candidates` is checked too, so a pre-candidates session file resets to the seed rather
+        // than serving a snapshot missing a table.
+        if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.technologies) || !Array.isArray(parsed.candidates)) return null;
         return parsed as Snapshot;
       } catch {
         // A half-written file from an interrupted run resets to the seed rather than taking the app

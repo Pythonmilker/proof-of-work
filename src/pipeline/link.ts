@@ -6,7 +6,7 @@
  * the existing row instead of creating a near-duplicate that quietly splits its evidence in two.
  */
 
-import type { Capability, Project, Snapshot, Technology } from '../store/types';
+import { DEFAULT_CANDIDATE_ID, type Capability, type Project, type Snapshot, type Technology } from '../store/types';
 import { containsTerm, normalize, overlap } from './text';
 import { slugify } from './validate';
 
@@ -130,6 +130,7 @@ export function linkCapabilities(
     if (!id || existing.includes(id) || created.some((c) => c.id === id)) continue;
     const row: Capability = {
       id,
+      candidate: DEFAULT_CANDIDATE_ID,
       name: raw,
       statement: raw,
       tier: 'stretch',

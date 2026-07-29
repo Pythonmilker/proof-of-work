@@ -13,6 +13,7 @@ function req(id: string, kind: Requirement['kind']): Requirement {
 function result(id: string, status: RequirementResult['status']): RequirementResult {
   return {
     requirementId: id,
+    candidate: 'candidate-test',
     requirementText: `requirement ${id}`,
     kind: 'required',
     category: 'process',
@@ -28,7 +29,7 @@ function result(id: string, status: RequirementResult['status']): RequirementRes
   };
 }
 
-const emptySnapshot: Snapshot = { projects: [], technologies: [], capabilities: [], evidence: [], roles: [] };
+const emptySnapshot: Snapshot = { candidates: [], projects: [], technologies: [], capabilities: [], evidence: [], roles: [] };
 
 describe('coverage', () => {
   it('is 100 when everything required and preferred is proven', () => {
