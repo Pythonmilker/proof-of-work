@@ -66,12 +66,12 @@ Open Projects, expand **Tendril**. The expanded record has to show:
 
 The grid behind it should still be readable, so all seven projects are visible in the background.
 
-## 3. The Interface dashboard  (PICK)
+## 3. The Interface pages  (PICK) — CAPTURED
 
-**Needs Airtable.** Built from `airtable/INTERFACE.md`, about fifteen minutes.
-
-Land on the most recent Roles record. Gauge visible, Evidence list populated, and the Needs Review
-counter at 1 after ingesting `raw/11-broken-fragment.txt`.
+**Captured 2026-07-29** as `12-airtable-pipeline.png` (Needs review counter at 1, the parked
+fragment with its reason, Scoring Runs naming the applicant) and `13-airtable-fit-report.png`
+(Applicant, Verdict Summary, 75, Scored On, the Results list with the trust line). Both cropped
+from full-screen snips; rebuild instructions live in `airtable/INTERFACE.md`.
 
 ## 4. Raw blob against structured record  (PICK)
 
