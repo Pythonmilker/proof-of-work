@@ -142,15 +142,21 @@ export function App() {
         {status ? <ModeBanner mode={status.mode} backend={status.backend} /> : null}
       </header>
 
-      <p className="standfirst">
-        Paste an applicant&rsquo;s resume; claims land unverified. Add their supporting documents; claims
-        earn receipts. Then score any applicant against any posting — verdicts by fixed rules, in code.
-        {live ? ' The record lives in Airtable; this app writes to it.' : ''}
-      </p>
+      {screen === 'applicants' ? null : (
+        // The landing carries the hero, which says all of this and more; repeating it directly above
+        // the hero would read as a stutter. The other screens keep the one-line framing.
+        <p className="standfirst">
+          Paste an applicant&rsquo;s resume; claims land unverified. Add their supporting documents;
+          claims earn receipts. Then score any applicant against any posting — verdicts by fixed rules,
+          in code.
+          {live ? ' The record lives in Airtable; this app writes to it.' : ''}
+        </p>
+      )}
 
       {screen === 'applicants' ? (
         <Applicants
           samples={status?.samples ?? []}
+          backend={status?.backend ?? null}
           snapshot={snapshot}
           roster={roster}
           live={live}

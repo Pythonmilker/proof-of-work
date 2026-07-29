@@ -68,7 +68,9 @@ describe('interface vocabulary', () => {
 
   it('uses the domain vocabulary the product is built around', () => {
     const all = files.map((f) => readFileSync(f, 'utf8')).join('\n');
-    for (const word of ['Evidence', 'coverage', 'Requirements', 'record', 'Gaps', 'Applicants', 'unverified']) {
+    // 'receipts' joined the list with the landing hero: the claims-to-receipts loop is the product
+    // sentence, and the hero saying it is what keeps the landing from reading as a generic dashboard.
+    for (const word of ['Evidence', 'coverage', 'Requirements', 'record', 'Gaps', 'Applicants', 'unverified', 'receipts']) {
       expect(all, `the interface never says "${word}"`).toContain(word);
     }
   });

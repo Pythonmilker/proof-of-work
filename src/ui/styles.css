@@ -955,3 +955,267 @@ input.text:focus {
 input.text::placeholder {
   color: var(--text-faint);
 }
+
+/* ── landing hero ──────────────────────────────────────────────────────────────────────────────── */
+
+/*
+ * Answers, in order: what this is, how it works, where the data goes, where to see it. The Airtable
+ * card is the one solid-accent element on the landing; everything else on that screen is ghost, so
+ * the visual hierarchy points at the delivered record.
+ */
+.hero {
+  margin: 0 0 30px;
+}
+.hero .purpose {
+  color: var(--text-dim);
+  font-size: 15px;
+  max-width: 72ch;
+  margin: 0 0 18px;
+}
+
+.hero-steps {
+  list-style: none;
+  counter-reset: step;
+  margin: 0 0 18px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.hero-steps li {
+  counter-increment: step;
+  position: relative;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px 12px 46px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.hero-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 13px;
+  top: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.hero-steps b {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.cta {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-raised));
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px 18px;
+  flex-wrap: wrap;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.22);
+}
+.cta-copy {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.cta-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+}
+.cta-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  max-width: 64ch;
+}
+.cta .btn {
+  flex: none;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+.cta-missing {
+  color: var(--text-faint);
+}
+
+/* The demo fit report's pointer at the delivered surface: quiet, but not hidden. */
+.delivery {
+  border-left: 3px solid var(--accent);
+}
+
+/* ── mobile ────────────────────────────────────────────────────────────────────────────────────── */
+
+/*
+ * Layout, not redesign: the app must read at 390×844 and 768×1024. Multi-column layouts collapse,
+ * chips and tab rows wrap, touch targets reach 44px, and the small type sizes rise — content text to
+ * a 14px floor; the uppercase letter-spaced micro-labels to a 12px floor, where the tracking and caps
+ * keep them legible at that size. Inputs go to 16px so mobile Safari does not zoom on focus.
+ */
+@media (max-width: 900px) {
+  .hero-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  body {
+    font-size: 15px;
+  }
+  .shell {
+    padding: 0 16px 64px;
+  }
+  .topbar {
+    gap: 8px 14px;
+    padding: 14px 0 12px;
+    margin-bottom: 22px;
+  }
+  .tabs {
+    flex-wrap: wrap;
+    margin-left: 0;
+  }
+  .tab {
+    font-size: 14px;
+    padding: 10px 14px;
+    min-height: 44px;
+  }
+  .mode-detail {
+    min-width: min(340px, calc(100vw - 40px));
+  }
+
+  .btn {
+    min-height: 44px;
+    padding: 11px 20px;
+    font-size: 14px;
+  }
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .actions .btn {
+    width: 100%;
+  }
+  .drop {
+    min-height: 44px;
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+  .sample {
+    min-height: 44px;
+    padding: 11px 9px;
+    font-size: 14px;
+  }
+  .sample .bytes {
+    font-size: 12.5px;
+  }
+  .radio-list label {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .applicant {
+    flex-wrap: wrap;
+    min-height: 44px;
+  }
+  .applicant .who .mono {
+    font-size: 12.5px;
+  }
+
+  textarea {
+    font-size: 16px;
+  }
+  input.text {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .standfirst,
+  .hero-steps li,
+  .cta-sub,
+  .mono,
+  .hint,
+  .notice,
+  .legend,
+  .definitions,
+  .determinism,
+  .problems,
+  .fields,
+  .citations .row,
+  .gap-row .closest,
+  .stages li,
+  table,
+  .footer .mono {
+    font-size: 14px;
+  }
+  .blob {
+    font-size: 13px;
+  }
+  .pill {
+    font-size: 13px;
+  }
+  .chip {
+    font-size: 12.5px;
+  }
+  .hint code {
+    font-size: 13px;
+  }
+
+  /* Uppercase letter-spaced micro-labels: 12px floor. */
+  .section-label,
+  .counts span,
+  .gauge .caption,
+  .req-head .kind,
+  .req-head .status,
+  .gap-row .what em,
+  th,
+  .citations .row > span:first-child {
+    font-size: 12px;
+  }
+  .fields dt {
+    font-size: 12.5px;
+  }
+  .rationale .tag {
+    font-size: 11px;
+  }
+
+  /* Requirement rows: the kind/status pair drops to its own line instead of squeezing the title. */
+  .req-head {
+    flex-wrap: wrap;
+  }
+  .req-head .title {
+    flex: 1 1 60%;
+  }
+  .req-head .status {
+    margin-left: 0;
+  }
+
+  /* Citations: the label column stacks above its content instead of eating a fixed 96px. */
+  .citations {
+    margin-left: 10px;
+    padding: 10px 12px;
+  }
+  .citations .row {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+  .rationale {
+    margin-left: 10px;
+  }
+
+  .counts {
+    gap: 14px 22px;
+  }
+}

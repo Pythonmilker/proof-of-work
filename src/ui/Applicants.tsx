@@ -12,12 +12,86 @@ import type { Snapshot } from '../store/types';
 import type { IntakeState, ResumeState } from './App';
 import {
   AIRTABLE_BASE_URL,
+  AIRTABLE_REPORT_URL,
   ingestResume,
+  type Backend,
   type CandidateSummary,
   type ResumeIngestResult,
   type SampleFile,
 } from './api';
 import { Intake, StageList } from './Intake';
+
+/**
+ * The landing hero: what this is, how it works, where the data goes, and where to see it — in that
+ * order, because a recruiter opening this cold should not have to reverse-engineer the product from a
+ * roster. The Airtable card is the ONE solid-accent element on the landing; every other control here
+ * stays ghost or quiet, so hierarchy does the pointing.
+ *
+ * The sub-caption is mode-honest. The static build runs the whole pipeline in the visitor's browser
+ * and writes nothing anywhere; the dev server runs it against a local store; a live deployment writes
+ * to the base. Each posture says which one it is — the demo never claims it writes to Airtable.
+ */
+function Hero({ live, backend }: { live: boolean; backend: Backend | null }) {
+  const demoSub =
+    backend === 'browser'
+      ? 'This demo runs entirely in your browser — nothing you paste leaves the page. In production the pipeline delivers every record to Airtable; this link is that delivery, live.'
+      : 'This demo writes to a local store, never to Airtable. In production the pipeline delivers every record to Airtable; this link is that delivery, live.';
+
+  return (
+    <section className="hero">
+      <h1>Applicants</h1>
+      <p className="purpose">
+        A recruiter&rsquo;s tool for qualifying applicants: claims are verified against receipts, fit
+        is scored against any posting by fixed rules, and the gaps are reported honestly.
+      </p>
+
+      <ol className="hero-steps">
+        <li>
+          <b>Paste an applicant&rsquo;s resume</b> — every claim lands unverified.
+        </li>
+        <li>
+          <b>Add their supporting documents</b> — receipts attach and claims flip to verified.
+        </li>
+        <li>
+          <b>Score them against any posting</b> — every verdict cites its receipts, and the gaps are
+          listed.
+        </li>
+      </ol>
+
+      <div className="cta">
+        <div className="cta-copy">
+          <p className="cta-title">
+            {live ? 'This deployment writes to the Airtable base' : 'The delivered record lives in Airtable'}
+          </p>
+          <p className="cta-sub">
+            {live
+              ? 'Every ingest and every scoring run lands in the base as rows. The fit report link is that delivery, live.'
+              : demoSub}
+          </p>
+        </div>
+        {AIRTABLE_REPORT_URL ? (
+          <a className="btn cta-btn" href={AIRTABLE_REPORT_URL} target="_blank" rel="noreferrer">
+            {live
+              ? 'Open the live fit report ↗'
+              : 'See the delivered record — the live Airtable fit report ↗'}
+          </a>
+        ) : (
+          // The env URL is baked at build time. Absent, the card stays and says so — a hidden card is
+          // a silent fallback and a dead button is worse.
+          <span className="mono cta-missing">
+            No delivery link configured — set VITE_AIRTABLE_REPORT_URL in .env.local to the shared fit
+            report.
+          </span>
+        )}
+        {live && AIRTABLE_BASE_URL ? (
+          <a className="btn ghost" href={AIRTABLE_BASE_URL} target="_blank" rel="noreferrer">
+            Open the base ↗
+          </a>
+        ) : null}
+      </div>
+    </section>
+  );
+}
 
 function ClaimReport({ result, snapshot }: { result: ResumeIngestResult; snapshot: Snapshot | null }) {
   const techName = (id: string) => snapshot?.technologies.find((t) => t.id === id)?.name ?? id;
@@ -98,6 +172,7 @@ function ClaimReport({ result, snapshot }: { result: ResumeIngestResult; snapsho
 
 export function Applicants({
   samples,
+  backend,
   snapshot,
   roster,
   live,
@@ -110,6 +185,7 @@ export function Applicants({
   onChanged,
 }: {
   samples: SampleFile[];
+  backend: Backend | null;
   snapshot: Snapshot | null;
   roster: CandidateSummary[] | null;
   live: boolean;
@@ -131,7 +207,7 @@ export function Applicants({
     // roster rendered from the bundled seed would be fixture data posing as live — the boundary lie.
     return (
       <>
-        <h1>Applicants</h1>
+        <Hero live={live} backend={backend} />
         <p className="lede">
           The applicant record lives in Airtable, written by the n8n workflows. This app holds no
           credential to read it back, so the roster is browsed there. Resume intake runs on the dev
@@ -139,7 +215,7 @@ export function Applicants({
         </p>
         <div className="actions">
           {AIRTABLE_BASE_URL ? (
-            <a className="btn" href={AIRTABLE_BASE_URL} target="_blank" rel="noreferrer">
+            <a className="btn ghost" href={AIRTABLE_BASE_URL} target="_blank" rel="noreferrer">
               Open the base ↗
             </a>
           ) : (
@@ -171,12 +247,7 @@ export function Applicants({
 
   return (
     <>
-      <h1>Applicants</h1>
-      <p className="lede">
-        Every applicant is a claim sheet. A pasted resume lands as unverified claims; supporting
-        documents attach receipts to the claims they match; and the chips that never turn verified are
-        the interview questions.
-      </p>
+      <Hero live={live} backend={backend} />
 
       {error ? <div className="notice bad">{error}</div> : null}
 
@@ -259,7 +330,8 @@ export function Applicants({
             spellCheck={false}
           />
           <div className="actions">
-            <button className="btn" onClick={() => void readResume()} disabled={!text.trim() || running}>
+            {/* Ghost, not solid: the landing reserves its one solid-accent button for the Airtable card. */}
+            <button className="btn ghost" onClick={() => void readResume()} disabled={!text.trim() || running}>
               {running ? 'Reading…' : 'Read the resume'}
             </button>
             <button

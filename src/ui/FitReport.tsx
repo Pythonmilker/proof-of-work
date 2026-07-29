@@ -346,6 +346,30 @@ export function FitReport({
         ) : null}
       </div>
 
+      {/* Only demo runs reach this full render — live runs end on the confirmation card above — so
+          this banner never claims a demo run wrote anything. It points at where production lands. */}
+      <div className="card delivery" style={{ marginTop: 18 }}>
+        <p className="section-label">Where this lands in production</p>
+        <p className="cta-sub">
+          A demo run scores against the local store and writes nothing to Airtable. In production the
+          pipeline delivers every run to the base — one Roles row plus one Results row per requirement,
+          citations as links. The seeded applicant&rsquo;s run against the real posting is that
+          delivery, live:
+        </p>
+        {AIRTABLE_REPORT_URL ? (
+          <div className="actions" style={{ marginTop: 10 }}>
+            <a className="btn ghost" href={AIRTABLE_REPORT_URL} target="_blank" rel="noreferrer">
+              Open the live fit report ↗
+            </a>
+          </div>
+        ) : (
+          <p className="mono" style={{ margin: '10px 0 0' }}>
+            No delivery link configured — set VITE_AIRTABLE_REPORT_URL in .env.local to the shared fit
+            report.
+          </p>
+        )}
+      </div>
+
       <div className="card" style={{ marginTop: 18 }}>
         <h2>Requirements</h2>
         {snapshot

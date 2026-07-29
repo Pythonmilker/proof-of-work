@@ -299,7 +299,9 @@ export function Intake({
           </div>
 
           <div className="actions">
-            <button className="btn" onClick={run} disabled={!blob.trim() || running}>
+            {/* Ghost, not solid: this slot renders on the landing, and the landing reserves its one
+                solid-accent button for the Airtable delivery card. */}
+            <button className="btn ghost" onClick={run} disabled={!blob.trim() || running}>
               {running ? 'Ingesting…' : 'Ingest'}
             </button>
             <button
