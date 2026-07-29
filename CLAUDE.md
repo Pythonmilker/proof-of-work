@@ -88,7 +88,11 @@ Global standards load from `~/.claude/CLAUDE.md`.
 - [x] README through the `technical-writing` skill with its grep pass re-run
 - [x] Nine screenshots captured by `pnpm screenshots`; three more need Joel's live accounts (the
       committed set predates the v3 tabs and wants a reshoot)
-- [ ] 60 to 90 second recording
+- [x] One-click recruiter demo with zero dependencies: the static build hosted live at
+      proof.viralhostdigital.com (S3 + CloudFront + WAF, Terraform-managed, keyless in-browser
+      pipeline)
+- [ ] 60 to 90 second recording — OPTIONAL since the live demo URL shipped; its remaining value is
+      the LinkedIn Featured thumbnail and interview rehearsal (script: docs/DEMO-SCRIPT.md)
 
 # Compact instructions
 When compacting, keep: the non-negotiables above, the current task, the list of modified files, and any
