@@ -947,3 +947,108 @@ clients/proof-of-work/
 | Serialising structure to dodge a table | The five-table rule produced JSON-in-long-text and was corrected to six. `tests/schema-parity.test.ts` now fails on a JSON blob rather than on a table count |
 | Screenshots depend on Joel's accounts | Everything code-side runs with zero credentials; SaaS steps reduced to one command plus a click-script |
 | Unverifiable claims about Arootah | Only site-verified vocabulary used. "18 functional disciplines" is confirmed; "700+ advisors" and "600+ coaches" were **not** found on the site and are not used anywhere |
+
+---
+
+# v3 — THE RECRUITER SEAT (supersedes the UI seat map above; the pipeline stands)
+
+Signed off 2026-07-28. Origin: the app's first real user test. Joel sat down to operate it and read
+the whole surface backwards — which exposed two truths at once. The labels lied about the seat
+("Score this role" scores the candidate), and the machine underneath was already the product he
+described: ingest → verify against receipts → score in code → report with gaps. v3 does not change
+the machine. It changes who sits at it and what drops into the intake slot.
+
+## v3.1 The insight that makes this cheap
+
+A resume is an artifact whose claims arrive with **no receipts**. The evidence gate — a capability
+with nothing linked can never score proven — was built to keep one candidate honest; pointed at an
+arbitrary resume it is a **claim-verification engine with no new moving parts**. Unverified is the
+natural state of a resume in this system. Supporting documents ingest as evidence, link to the
+claims, and promote them. The recruiter watches a resume turn from asserted to proven, line by line,
+and the lines that never turn are the interview questions.
+
+## v3.2 Seven tables
+
+`Candidates` joins the schema. The rule was never a number — it is legibility (see the five→six
+correction in §17): a person is real structure, not a JSON blob dodging a tab. `schema-parity`
+pins SEVEN and keeps failing on serialized structure.
+
+**Ownership map:**
+
+| Global (shared vocabulary) | Per-candidate |
+|---|---|
+| Technologies (React is React for everyone) | Candidates — the person |
+| Roles — postings, scoreable by anyone | Projects, Capabilities, Evidence |
+| | Results — one row per candidate × posting × requirement |
+
+Candidates fields: `Name` (primary), `Key` (slug), `Contact` (as extracted; recruiters handle
+applicant PII as a matter of course), `Source` (resume filename or "pasted"), `Ingested At`, plus
+links to Projects / Capabilities / Evidence / Results. Result keys become
+`{candidateKey}-{roleKey}-req-N`.
+
+## v3.3 The resume intake path
+
+New artifact kind `resume`, same two-lane extraction as every other artifact:
+
+- **Identity:** name, contact, links — the header of any resume. (This also closes the original
+  "Candidate should be parsed, not typed" thread: it now is.)
+- **Claims:** skills → matched into the global Technologies taxonomy by the existing alias
+  machinery; experience and project statements → Project rows and Capabilities **with zero evidence
+  links** and tier `stretch` — which means the existing scorer needs no changes at all: the gate
+  already caps receiptless claims at partial.
+- Deterministic floor: header-line name, section-header segmentation, bullet parsing — resumes are
+  bullet lists, and bullet lists parse (the jd.ts lesson, reapplied).
+- Fixture: Joel's own `resume-copy.md` — the resume this workspace wrote, ingested by the product
+  it describes.
+
+Supporting documents then ingest exactly as v1 always did — but attached to the candidate — and
+the link/dedup stage wires them to the claimed rows. Promotion is visible in the claim report:
+verified chips vs unverified chips.
+
+## v3.4 The seat map (replaces §4-§5 UI framing)
+
+- **Applicants** (landing): candidate list + "New applicant" — paste resume text, ingest, read the
+  claim report; add supporting docs to promote claims. v3.0 intake is paste-first; PDF parsing is
+  explicitly out of scope (dependency cost, and recruiters can paste).
+- **Score**: the posting shelf — every Roles row with its per-candidate scores, plus paste-a-new-
+  posting. "If this position isn't a fit, maybe another is" as a visible surface, not a sentence.
+- **Fit report**: unchanged machinery, candidate-scoped, honest labels ("Score NAME's fit against
+  this posting" — the button never again names the wrong direction).
+- The record browser tab dies; live mode links out to Airtable where the record actually lives.
+- Recruiter read-surface (shared Airtable views) unchanged and still the delivery artifact.
+
+## v3.5 Seed and regression anchor
+
+Joel is `candidate-joel`, wrapping the entire existing record. The demo stays self-proving: the
+first applicant in the product is its author, and **Joel × Arootah must still score 75 (10 proven ·
+4 partial · 2 gaps)** after the migration — that number is the v3 regression anchor, pinned before
+any UI work starts.
+
+## v3.6 Non-goals for v3.0
+
+File upload/PDF text extraction · authentication and multi-tenancy · Airtable automations (plan
+reality unchanged) · per-candidate Interface pages (click-built later if a search needs them).
+
+## v3.7 Security boundary (Joel's requirement, 2026-07-28: "only connects to the Airtable I
+control, cannot be reverse engineered")
+
+The achievable form, stated precisely:
+
+1. **The client never touches Airtable.** Every read and write goes through the server boundary
+   (Vite server routes locally; n8n webhooks or a Lambda in deployment). The PAT exists only in
+   that boundary's environment. This is already the v2 architecture; v3 keeps it absolute — no
+   direct-from-browser Airtable calls, ever.
+2. **The base is pinned server-side.** Handlers and workflows read base/table identity from their
+   own environment and ignore anything client-supplied. A copied client cannot be repointed at a
+   different base, and a tampered request cannot redirect writes.
+3. **Endpoints are not public utilities.** The n8n webhooks and server routes require a shared
+   app token (header check, constant-time compare) and enforce an origin allowlist. Someone who
+   extracts the endpoint URL from the bundle gets a door that doesn't open.
+4. **The honest limit, on the record:** client code delivered to a browser can always be read —
+   minification is obfuscation, not protection. The defense is that the readable part contains
+   nothing exploitable: no credentials, no base authority, no scoring logic worth lifting (matching
+   and scoring run behind the boundary). "Cannot be reverse engineered" is achieved not by hiding
+   the client but by making the client worthless to an attacker — the same reason the shared view
+   link is safe to put on a resume.
+5. **Distribution posture:** recruiters receive surfaces (the shared view, a hosted app URL), never
+   the repository. The repo has no remote by deliberate choice.
