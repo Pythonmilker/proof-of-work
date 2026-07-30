@@ -107,16 +107,24 @@ const VALID_CATEGORY = new Set<RequirementCategory>([
  */
 const STRUCTURED_MINIMUM = 4;
 
-/** What the note says when the requirements did not come off a bullet list. Null is "no degradation". */
+/**
+ * What the reader tells the reviewer when the requirements did not come off a bullet list.
+ *
+ * Whole sentences, in the reviewer's terms, because these render verbatim in the report. They say
+ * what the reader DID, never what it lacked: reading a posting in code is the designed primary path
+ * (see the header above), so framing it as a missing model would report the design as a fault.
+ * Null is "nothing worth saying".
+ */
 const PASS_NOTES: Record<ParsePass, string | null> = {
   bulleted: null,
-  unmarked: 'read as an unmarked list',
-  prose: 'read from prose',
+  unmarked: 'This posting has no bulleted list, so its requirements were read from the lines under its headings.',
+  prose: 'This posting has no list at all, so its requirements were read from its sentences.',
 };
 
-function joinNotes(...parts: Array<string | null>): string | null {
-  const kept = parts.filter((p): p is string => Boolean(p));
-  return kept.length > 0 ? kept.join(', ') : null;
+/** Only a model that was *expected* and failed is a degradation worth naming. */
+function modelUnavailable(reason: string, passNote: string | null): string {
+  const base = `The posting-parsing model was unavailable (${reason}), so the posting was read in code instead.`;
+  return passNote ? `${base} ${passNote}` : base;
 }
 
 export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOutcome> {
@@ -126,6 +134,16 @@ export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOu
   if (deterministic.requirements.length >= STRUCTURED_MINIMUM) {
     // Not a fallback — the designed primary for structured postings. A bulleted read carries no note;
     // an unmarked or prose read carries one, because the reader had to work harder for it.
+    return { role: deterministic, via: 'deterministic', model: 'none', note: passNote };
+  }
+
+  // No key means there is no model to fall to, so there is no degradation to report — only what the
+  // reader did. The header already states the missing key once; repeating it per run reads as a
+  // failure on the hosted demo, where a key is never coming.
+  if (!opts.apiKey) {
+    if (deterministic.requirements.length === 0) {
+      throw new UnreadablePostingError(passNote);
+    }
     return { role: deterministic, via: 'deterministic', model: 'none', note: passNote };
   }
 
@@ -143,7 +161,7 @@ export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOu
   );
 
   if (!result.ok) {
-    const note = joinNotes(shortReason(result.error.kind), passNote);
+    const note = modelUnavailable(shortReason(result.error.kind), passNote);
     if (deterministic.requirements.length === 0) throw new UnreadablePostingError(note);
     return { role: deterministic, via: 'deterministic', model: 'none', note };
   }
@@ -152,7 +170,7 @@ export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOu
   // A model reply with nothing usable in it is worse than no model at all — the deterministic reader
   // would at least have returned what it found.
   if (parsed.requirements.length === 0) {
-    const note = joinNotes('model returned no requirements', passNote);
+    const note = modelUnavailable('it returned no requirements', passNote);
     if (deterministic.requirements.length === 0) throw new UnreadablePostingError(note);
     return { role: deterministic, via: 'deterministic', model: 'none', note };
   }

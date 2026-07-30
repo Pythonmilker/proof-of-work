@@ -151,17 +151,24 @@ describe('never a silent fallback', () => {
 
   it('names the unmarked pass in the note', async () => {
     const outcome = await parseRole(UNMARKED, keyless);
-    expect(outcome.note).toBe('read as an unmarked list');
+    expect(outcome.note).toBe(
+      'This posting has no bulleted list, so its requirements were read from the lines under its headings.',
+    );
   });
 
-  it('names the prose pass in the note, alongside why no model ran', async () => {
-    // Under the structured minimum, so the model lane is attempted and fails on the missing key. Both
-    // facts reach the header: which pass read the posting, and why nothing better did.
+  it('says what the reader did, not that a model was missing', async () => {
+    // Keyless is the hosted demo's permanent state, and reading a posting in code is the DESIGNED
+    // primary — so a note here must describe the pass, never report the absent model as a fault. The
+    // note used to read "no key set, read from prose" and then got wrapped in "Posting parsed without
+    // a model (…)", which fired on every run of the public demo and read as breakage. Joel hit it.
     const outcome = await parseRole(
       'Engineer\n\nYou will build and maintain the React front end for our operators.\n',
       keyless,
     );
-    expect(outcome.note).toBe('no key set, read from prose');
+    expect(outcome.note).toBe(
+      'This posting has no list at all, so its requirements were read from its sentences.',
+    );
+    expect(outcome.note).not.toMatch(/model|key/i);
     expect(outcome.role.requirements.length).toBeGreaterThan(0);
   });
 

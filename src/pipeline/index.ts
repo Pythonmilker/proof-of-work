@@ -552,7 +552,11 @@ export async function matchRole(
   const notes: string[] = [];
 
   const parsed = await parseRole(postedText, opts);
-  if (parsed.note) notes.push(`Posting parsed without a model (${parsed.note})`);
+  // The note is already a whole sentence in the reviewer's terms. It used to be wrapped in "Posting
+  // parsed without a model (…)", written when the model was the primary path — since the flip to
+  // deterministic-first that wrapper reported the design as a fault, on every run of the keyless
+  // hosted demo. See PASS_NOTES in jd.ts.
+  if (parsed.note) notes.push(parsed.note);
 
   const vectors = await buildVectors(snapshot, parsed.role.requirements, opts);
   if (vectors.note) notes.push(vectors.note);
