@@ -99,7 +99,7 @@ export function Score({
           <p className="mono" style={{ color: 'var(--text-faint)', marginBottom: 0, marginTop: 12 }}>
             {loadedFromRole
               ? `Loaded from the shelf: ${loadedFromRole}.`
-              : `Loaded: ${SAMPLE_POSTING_LABEL}. The requirement list is real; the company copy is assembled from the public site. Paste the actual posting over it for a real run.`}
+              : `Loaded: ${SAMPLE_POSTING_LABEL} — kept verbatim as the sample. Paste your own posting over it to score this applicant against yours instead.`}
           </p>
         </div>
 
