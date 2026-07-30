@@ -97,8 +97,8 @@ line) should be legible.
 Expand one requirement row before capturing so the citation panel is open. A closed report is a list of
 verdicts; an open one shows the receipts, and the receipts are the argument.
 
-The bundled posting is the actual LinkedIn posting, captured 2026-07-28, so this shot needs no
-preparation.
+The bundled posting loads into the box by default — a real posting's requirements under an invented
+company name — so this shot needs no preparation.
 
 ## Optional sixth: the Slack message
 

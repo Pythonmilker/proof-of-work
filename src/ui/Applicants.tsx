@@ -8,14 +8,16 @@
  */
 
 import { useState } from 'react';
-import type { Snapshot } from '../store/types';
+import { DEFAULT_CANDIDATE_ID, type Snapshot } from '../store/types';
 import type { IntakeState, ResumeState } from './App';
 import {
   AIRTABLE_BASE_URL,
   AIRTABLE_REPORT_URL,
+  deleteCandidate,
   ingestResume,
   type Backend,
   type CandidateSummary,
+  type DeleteResult,
   type ResumeIngestResult,
   type SampleFile,
 } from './api';
@@ -32,10 +34,14 @@ import { Intake, StageList } from './Intake';
  * to the base. Each posture says which one it is — the demo never claims it writes to Airtable.
  */
 function Hero({ live, backend }: { live: boolean; backend: Backend | null }) {
+  // The link is ONE finished report, not a window onto the visitor's own run. Saying "live" next to a
+  // button a visitor clicks straight after scoring something invited exactly that reading. The two
+  // demo postures differ only in where "here" is — the browser, or the dev server's local store — and
+  // both now say the same thing about the link.
   const demoSub =
     backend === 'browser'
-      ? 'This demo runs entirely in your browser — nothing you paste leaves the page. In production the pipeline delivers every record to Airtable; this link is that delivery, live.'
-      : 'This demo writes to a local store, never to Airtable. In production the pipeline delivers every record to Airtable; this link is that delivery, live.';
+      ? 'Everything you paste here stays in this browser. The link opens a finished report from one real posting, scored earlier with this same pipeline. It is a fixed example, not a live feed of what you score.'
+      : 'Everything you paste here stays in the local store on this machine. The link opens a finished report from one real posting, scored earlier with this same pipeline. It is a fixed example, not a live feed of what you score.';
 
   return (
     <section className="hero">
@@ -71,9 +77,7 @@ function Hero({ live, backend }: { live: boolean; backend: Backend | null }) {
         </div>
         {AIRTABLE_REPORT_URL ? (
           <a className="btn cta-btn" href={AIRTABLE_REPORT_URL} target="_blank" rel="noreferrer">
-            {live
-              ? 'Open the live fit report ↗'
-              : 'See the delivered record — the live Airtable fit report ↗'}
+            {live ? 'Open the live fit report ↗' : 'See a delivered fit report ↗'}
           </a>
         ) : (
           // The env URL is baked at build time. Absent, the card stays and says so — a hidden card is
@@ -199,6 +203,10 @@ export function Applicants({
 }) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Which row is one click from being removed. Confirmation without a dialog or a dependency. */
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removed, setRemoved] = useState<string | null>(null);
 
   const { text, sourceName, outcome } = resumeState;
 
@@ -245,11 +253,41 @@ export function Applicants({
     }
   }
 
+  /**
+   * Two clicks, no dialog. The first arms the row and the second removes it — a recruiter clearing
+   * test applicants does this repeatedly, and a native confirm() in that loop is a modal to dismiss
+   * every time. The seeded applicant never reaches here: it has no control to click.
+   */
+  async function removeApplicant(id: string) {
+    if (id === DEFAULT_CANDIDATE_ID || removing) return;
+    if (confirming !== id) {
+      setConfirming(id);
+      return;
+    }
+    setRemoving(id);
+    setError(null);
+    setRemoved(null);
+    try {
+      const result = await deleteCandidate(id);
+      setRemoved(`Removed ${result.name}: ${describeRemoval(result.removed)}.`);
+      if (selectedId === id) onSelect(DEFAULT_CANDIDATE_ID);
+      // A claim sheet for someone no longer on file is stale the moment the row goes.
+      if (outcome?.candidateId === id) onResumeState(FRESH);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConfirming(null);
+      setRemoving(null);
+    }
+  }
+
   return (
     <>
       <Hero live={live} backend={backend} />
 
       {error ? <div className="notice bad">{error}</div> : null}
+      {removed ? <div className="notice">{removed}</div> : null}
 
       <div className="split">
         <div>
@@ -260,30 +298,55 @@ export function Applicants({
             ) : (
               <div className="applicant-list">
                 {roster.map((c) => (
-                  <button
-                    key={c.id}
-                    className="applicant"
-                    aria-current={c.id === selectedId}
-                    onClick={() => onSelect(c.id)}
-                  >
-                    <span className="who">
-                      <b>{c.name}</b>
-                      <span className="mono">
-                        {c.source} · {c.ingestedAt.slice(0, 10)} · {c.projects}{' '}
-                        {c.projects === 1 ? 'project' : 'projects'}
+                  // The remove control is a SIBLING of the row, not a child: the row is itself a
+                  // button, and a button inside a button is invalid markup that browsers resolve by
+                  // guessing.
+                  <div className="applicant-row" key={c.id}>
+                    <button
+                      className="applicant"
+                      aria-current={c.id === selectedId}
+                      onClick={() => onSelect(c.id)}
+                    >
+                      <span className="who">
+                        <b>{c.name}</b>
+                        <span className="mono">
+                          {c.source} · {c.ingestedAt.slice(0, 10)} · {c.projects}{' '}
+                          {c.projects === 1 ? 'project' : 'projects'}
+                        </span>
                       </span>
-                    </span>
-                    <span className="chips">
-                      <span className="chip verified">{c.claims.verified} verified</span>
-                      <span className="chip unverified">{c.claims.unverified} unverified</span>
-                    </span>
-                  </button>
+                      <span className="chips">
+                        <span className="chip verified">{c.claims.verified} verified</span>
+                        <span className="chip unverified">{c.claims.unverified} unverified</span>
+                      </span>
+                    </button>
+                    {c.id === DEFAULT_CANDIDATE_ID ? (
+                      // No button at all for the seeded applicant. A control that always errors is
+                      // worse than no control, and the reason is on the row rather than in a tooltip.
+                      <span className="applicant-locked mono">seeded · kept</span>
+                    ) : (
+                      <button
+                        className={`applicant-remove${confirming === c.id ? ' confirming' : ''}`}
+                        onClick={() => void removeApplicant(c.id)}
+                        disabled={removing !== null}
+                        aria-label={
+                          confirming === c.id
+                            ? `Confirm removing ${c.name} and everything on file for them`
+                            : `Remove ${c.name}`
+                        }
+                      >
+                        {removing === c.id ? 'Removing…' : confirming === c.id ? 'Click again' : 'Remove'}
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
             <p className="hint" style={{ marginBottom: 0, marginTop: 10 }}>
               A claim counts as verified once its capability has evidence linked — something checkable,
-              not another assertion. The seeded applicant is the worked example the product ships with.
+              not another assertion. Removing an applicant takes their projects, claims, evidence and
+              scored requirements with them; the shared technology list and the postings stay. The
+              seeded applicant is the worked example the product ships with, so it is the one row that
+              cannot be removed.
             </p>
           </div>
 
@@ -372,3 +435,17 @@ export function Applicants({
 }
 
 const FRESH: ResumeState = { text: '', sourceName: 'pasted-resume', outcome: null };
+
+/**
+ * What a removal actually took, counted by the store rather than assumed by the screen. "Removed"
+ * on its own is a claim; these are the rows.
+ */
+function describeRemoval(removed: DeleteResult['removed']): string {
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  return [
+    count(removed.projects, 'project', 'projects'),
+    count(removed.claims, 'claim', 'claims'),
+    count(removed.evidence, 'evidence row', 'evidence rows'),
+    count(removed.results, 'scored requirement', 'scored requirements'),
+  ].join(', ');
+}

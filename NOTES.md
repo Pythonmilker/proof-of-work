@@ -6,9 +6,11 @@ Progress anchor. Update at the end of each session.
 
 **Code complete and green.** 180 tests passing across 12 files, 3 skipped behind `LIVE_OPENROUTER=1`,
 `tsc --noEmit` clean, `pnpm verify` passes including the n8n drift check. Branch `feat/proof-of-work`,
-not pushed. The bundled posting is now the ACTUAL LinkedIn posting (job id 4444969099, captured
-2026-07-28); the record scores 75 percent against it: 10 proven, 4 partial, 2 gaps, 16 requirements,
-all of them required. The two gaps are the degree line and the collaborate-with-vendors line — both
+not pushed. The bundled posting keeps the real posting's requirement bullets byte-for-byte under an
+invented company (Northwind Systems), with the About blurb, headcounts, learn-more URL and AI-in-hiring
+disclosure removed — the demo ships publicly at proof.viralhostdigital.com and a named company in a
+shipped fixture reads as leftover data. The record scores 75 percent against it: 10 proven, 4 partial,
+2 gaps, 16 requirements, all of them required. The two gaps are the degree line and the collaborate-with-vendors line — both
 genuinely true — and Claude Code lands proven.
 
 **The Airtable base is live, seeded, and scored against the real posting.** One Roles row
@@ -70,6 +72,19 @@ run, verified row for row before writing.
   bullets found). Verified verdict-identical under full model mode before the flip.
 
 ## Bugs found and fixed during the build
+
+- **The posting reader dead-ended on real postings (2026-07-30).** `parseRoleDeterministically` only
+  recognised lines opening with an explicit bullet marker, so a typical LinkedIn paste (headings, then
+  plain unmarked lines) and a prose-only posting both parsed to ZERO requirements — measured, not
+  guessed. On the hosted static build there is no key to fall through to, so zero meant the visitor got
+  "parsed without a model" over an empty report: a dead end in the deployed product. The reader now has
+  three passes (bulleted → unmarked-list-under-a-heading → prose sentences, capped at 20), sharing one
+  noise filter / splitList / marker helper, with section state tracked across all three. Pass 1 is
+  untouched, so the anchor is untouched. Nothing is silent: the outcome's note names the pass whenever
+  it was not the bulleted primary ("read as an unmarked list", "read from prose"), and a posting all
+  passes fail on raises `UnreadablePostingError` (status 400) instead of rendering a blank report.
+  Probe counts: LinkedIn-style 0 → 11, `•` bulleted 4 → 4, prose-only 0 → 5, sample 16 → 16.
+  `tests/jd.test.ts`.
 
 - **React matched `react-three-fiber`**, so the fit report cited a Unity game as React experience. Fixed
   with asymmetric hyphen boundaries in `containsTerm`; multi-word terms fold hyphens to spaces,
@@ -191,7 +206,8 @@ What remains:
    `docs/SHOTLIST.md` has the exact shots. Create the views first (`airtable/VIEWS.md`) or shot 2 has
    nothing to show.
 2. **The recording**, 60 to 90 seconds. Script in `docs/DEMO-SCRIPT.md`.
-3. **Arootah statistics, resolved 2026-07-28.** "700+ vetted advisors" and "600+ coaches" are not on
-   arootah.com but ARE in the posting itself, so they are primary-sourced and safe to quote *with that
-   attribution* (e.g. "your posting mentions 700+ advisors"). `tests/seed-integrity.test.ts` encodes the
-   rule: allowed in the posting text, still banned from our own prose in `raw/`.
+3. **Arootah statistics — rule replaced 2026-07-30.** The old rule allowed "700+ vetted advisors" and
+   "600+ coaches" inside the posting text (the company quoting itself) while banning them from our own
+   prose. The public demo killed that rationale: the bundled sample is now anonymised, so the figures
+   are banned everywhere, including the sample. `tests/seed-integrity.test.ts` asserts the inverse it
+   used to, plus a new test pinning all 16 requirement bullets byte-identical through the change.

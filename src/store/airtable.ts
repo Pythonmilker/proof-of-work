@@ -17,17 +17,21 @@
  * it is the seam where a real database would be simpler.
  */
 
-import type {
-  Candidate,
-  Capability,
-  Evidence,
-  Project,
-  Requirement,
-  RequirementResult,
-  Role,
-  Snapshot,
-  Store,
-  Technology,
+import {
+  DEFAULT_CANDIDATE_ID,
+  ProtectedCandidateError,
+  UnknownCandidateError,
+  ownedRows,
+  type Candidate,
+  type Capability,
+  type Evidence,
+  type Project,
+  type Requirement,
+  type RequirementResult,
+  type Role,
+  type Snapshot,
+  type Store,
+  type Technology,
 } from './types';
 
 export interface AirtableConfig {
@@ -444,6 +448,59 @@ export class AirtableStore implements Store {
         Projects: this.refs(result.matchedProjects),
         Evidence: this.refs(result.evidence),
       });
+    }
+  }
+
+  /**
+   * Delete one candidate and everything they own, for real.  (DESIGN.md §v3.2 — the ownership map)
+   *
+   * `read()` first, because Airtable identifies records by `recXXXXXXXX` and nothing else: the read is
+   * what builds the slug → record id map these deletes are addressed by, and what proves the candidate
+   * exists before anything is destroyed.
+   *
+   * Technologies and Roles are never in the delete list. A Technology row is global vocabulary and a
+   * Roles row is a posting anyone can be scored against — what goes is this candidate's Results rows
+   * for it. Airtable maintains the reverse side of every link itself, so unlike the local store there
+   * is no dangling-reference sweep to do: deleting a Project removes it from the Technologies that
+   * cited it.
+   */
+  async deleteCandidate(candidateId: string): Promise<void> {
+    if (candidateId === DEFAULT_CANDIDATE_ID) throw new ProtectedCandidateError(candidateId);
+    const snapshot = await this.read();
+    if (!snapshot.candidates.some((c) => c.id === candidateId)) throw new UnknownCandidateError(candidateId);
+
+    const owned = ownedRows(snapshot, candidateId);
+    // Children before the parent. Airtable does not care about the order, but a half-finished run that
+    // leaves a candidate holding fewer rows reads better than one that leaves orphans holding a link
+    // to a candidate who is gone.
+    await this.deleteByKeys(TABLES.results, owned.results);
+    await this.deleteByKeys(TABLES.evidence, owned.evidence);
+    await this.deleteByKeys(TABLES.capabilities, owned.capabilities);
+    await this.deleteByKeys(TABLES.projects, owned.projects);
+    await this.deleteByKeys(TABLES.candidates, [candidateId]);
+  }
+
+  /**
+   * Delete by our slugs, in chunks of ten.
+   *
+   * Same ceiling as every other write here, and the same reason: exceed it and the whole request 422s
+   * rather than just the extra rows. `request` carries the throttle, so the gap between chunks is the
+   * one the rest of this adapter already respects.
+   */
+  private async deleteByKeys(table: string, keys: readonly string[]): Promise<void> {
+    const ids = this.refs(keys);
+    for (let i = 0; i < ids.length; i += MAX_RECORDS_PER_WRITE) {
+      const chunk = ids.slice(i, i + MAX_RECORDS_PER_WRITE);
+      const query = new URLSearchParams();
+      for (const id of chunk) query.append('records[]', id);
+      await this.request(`${this.config.baseId}/${encodeURIComponent(table)}?${query}`, { method: 'DELETE' });
+      // Forget the ids too, or a later write in the same session resolves a slug to a record that no
+      // longer exists — which Airtable answers by silently dropping the link, not by failing.
+      for (const id of chunk) {
+        const key = this.keyByRecord.get(id);
+        if (key) this.recordByKey.delete(key);
+        this.keyByRecord.delete(id);
+      }
     }
   }
 

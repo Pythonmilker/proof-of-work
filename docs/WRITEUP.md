@@ -60,7 +60,8 @@ unverified, capped at partial. Ingest the applicant's supporting documents and t
 the claims they match, one promotion at a time. The scorer needed no changes to become a
 claim-verification engine, and the claims that never earn a receipt are the interview questions.
 
-Against the actual posting the record scores 75 percent. Airtable and n8n come out partial, with this
+Against the bundled posting — a real one's requirements, the company anonymised because the demo ships
+publicly — the record scores 75 percent. Airtable and n8n come out partial, with this
 project named as their only evidence, because that is what the record contains.
 
 ## Why Airtable

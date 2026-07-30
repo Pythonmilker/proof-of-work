@@ -13,7 +13,7 @@
 import { useState } from 'react';
 import type { CoverageStatus, Requirement, Snapshot } from '../store/types';
 import type { MatchState } from './App';
-import { AIRTABLE_BASE_URL, AIRTABLE_REPORT_URL, type MatchReport } from './api';
+import { AIRTABLE_BASE_URL, AIRTABLE_REPORT_URL, type Backend, type MatchReport } from './api';
 
 const MARKER: Record<CoverageStatus, string> = { proven: '●', partial: '◐', gap: '○' };
 
@@ -220,6 +220,7 @@ export function FitReport({
   state,
   onState,
   candidateName,
+  backend,
   onBack,
 }: {
   snapshot: Snapshot | null;
@@ -228,6 +229,8 @@ export function FitReport({
   onState: (next: MatchState) => void;
   /** Whose fit the outcome describes — the report is candidate-scoped and the header says so. */
   candidateName: string;
+  /** Which lane ran the pipeline. Only `browser` may claim the run stayed in the visitor's browser. */
+  backend: Backend | null;
   /** Back to the Score screen, where runs happen. */
   onBack: () => void;
 }) {
@@ -347,19 +350,25 @@ export function FitReport({
       </div>
 
       {/* Only demo runs reach this full render — live runs end on the confirmation card above — so
-          this banner never claims a demo run wrote anything. It points at where production lands. */}
+          this banner never claims a demo run wrote anything. It points at where production lands, and
+          it is explicit that the link is one delivered example rather than the run just finished
+          above: a visitor who reads it as a live feed of their own paste has been misled by us. */}
       <div className="card delivery" style={{ marginTop: 18 }}>
         <p className="section-label">Where this lands in production</p>
         <p className="cta-sub">
-          A demo run scores against the local store and writes nothing to Airtable. In production the
-          pipeline delivers every run to the base — one Roles row plus one Results row per requirement,
-          citations as links. The seeded applicant&rsquo;s run against the real posting is that
-          delivery, live:
+          {/* "In your browser" is only true on the static build; under the dev server the run
+              happens in Node against a local store. Saying the wrong one is a small lie in the app
+              whose whole argument is that it does not tell them. */}
+          {backend === 'browser'
+            ? 'This run scored in your browser and stays there.'
+            : 'This run scored locally and stays on this machine.'}{' '}
+          In production every run is delivered to Airtable, where a recruiter reads it without
+          logging in. The link opens one real delivered report as an example.
         </p>
         {AIRTABLE_REPORT_URL ? (
           <div className="actions" style={{ marginTop: 10 }}>
             <a className="btn ghost" href={AIRTABLE_REPORT_URL} target="_blank" rel="noreferrer">
-              Open the live fit report ↗
+              Open a delivered fit report ↗
             </a>
           </div>
         ) : (

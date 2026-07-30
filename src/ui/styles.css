@@ -936,6 +936,51 @@ tr.needs-review td {
   flex: none;
 }
 
+/*
+ * The remove control sits beside the row rather than inside it — the row is a button, and nesting one
+ * button in another is invalid markup. It stays quiet until it is armed: destructive weight belongs on
+ * the confirmation, not on the thing you might click by accident.
+ */
+.applicant-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.applicant-row .applicant {
+  flex: 1;
+  min-width: 0;
+}
+.applicant-remove,
+.applicant-locked {
+  flex: none;
+  border-radius: var(--radius-sm);
+  padding: 5px 9px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.applicant-remove {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+}
+.applicant-remove:hover:not(:disabled) {
+  color: var(--gap);
+  border-color: var(--gap);
+}
+.applicant-remove.confirming {
+  color: var(--gap);
+  border-color: var(--gap);
+  background: color-mix(in srgb, var(--gap) 12%, transparent);
+}
+.applicant-remove:disabled {
+  opacity: 0.45;
+}
+.applicant-locked {
+  border: 1px solid transparent;
+  color: var(--text-faint);
+}
+
 /* The source-name input beside the resume box. Same treatment as the textarea, one line tall. */
 input.text {
   width: 100%;

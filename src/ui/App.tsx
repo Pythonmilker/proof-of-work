@@ -192,6 +192,7 @@ export function App() {
             snapshot?.candidates.find((c) => c.id === matchState.candidateId)?.name ??
             selectedName
           }
+          backend={status?.backend ?? null}
           onBack={() => setScreen('score')}
         />
       ) : null}

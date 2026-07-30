@@ -73,7 +73,7 @@ One chip turns verified. The other stays unverified. Point at the one that staye
 
 **0:40 to 1:00. The score.**
 
-Open Score, select the seeded applicant in the radio list. The Arootah posting is pre-loaded. Press
+Open Score, select the seeded applicant in the radio list. The sample posting is pre-loaded. Press
 "Score Joel's fit".
 
 > "Any applicant against any posting. Requirements parsed out, matched against the record in code,

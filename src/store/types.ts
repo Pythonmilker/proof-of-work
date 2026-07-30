@@ -229,6 +229,80 @@ export interface Snapshot {
   roles: Role[];
 }
 
+/**
+ * Deleting the seeded candidate, refused.
+ *
+ * Typed rather than a bare Error because two callers need to tell this apart from a genuine failure:
+ * the server answers 403 on it, and the UI never renders a control that can raise it. The guard lives
+ * in the STORE, not only in those two places — an API someone can curl around the UI is not guarded.
+ */
+export class ProtectedCandidateError extends Error {
+  constructor(readonly candidateId: string) {
+    super(
+      `${candidateId} is the seeded applicant — the worked example the product ships with — and cannot be deleted`,
+    );
+    this.name = 'ProtectedCandidateError';
+  }
+}
+
+/** Deleting someone the store does not have. Distinct from the refusal above: a 404, not a 403. */
+export class UnknownCandidateError extends Error {
+  constructor(readonly candidateId: string) {
+    super(`no applicant on file with id ${candidateId}`);
+    this.name = 'UnknownCandidateError';
+  }
+}
+
+/**
+ * Everything one candidate OWNS, by the v3.2 ownership map — the rows that leave with them.
+ *
+ * Technologies and Roles are absent on purpose: they are global vocabulary. React is React for
+ * everyone and a posting is scoreable by anyone, so deleting an applicant removes their Results rows
+ * for a Role and leaves the Role itself standing.
+ *
+ * One function, four callers (both adapters, the server's counts, the browser lane), because the
+ * ownership map is exactly the thing that must not be re-derived slightly differently in each of them.
+ */
+export interface OwnedRows {
+  projects: string[];
+  capabilities: string[];
+  evidence: string[];
+  /** Results row keys, `{candidateKey}-{roleKey}-req-N`, across every role. */
+  results: string[];
+}
+
+export function ownedRows(snapshot: Snapshot, candidateId: string): OwnedRows {
+  return {
+    projects: snapshot.projects.filter((p) => p.candidate === candidateId).map((p) => p.id),
+    capabilities: snapshot.capabilities.filter((c) => c.candidate === candidateId).map((c) => c.id),
+    evidence: snapshot.evidence.filter((e) => e.candidate === candidateId).map((e) => e.id),
+    results: snapshot.roles.flatMap((role) =>
+      role.results
+        .filter((r) => r.candidate === candidateId)
+        .map((r) => `${r.candidate}-${role.id}-${r.requirementId}`),
+    ),
+  };
+}
+
+/** What a delete removed, in the words the roster reports it in. */
+export interface DeletionCounts {
+  projects: number;
+  claims: number;
+  evidence: number;
+  /** Results rows — one per scored requirement, across every posting this candidate was scored on. */
+  results: number;
+}
+
+export function deletionCounts(snapshot: Snapshot, candidateId: string): DeletionCounts {
+  const owned = ownedRows(snapshot, candidateId);
+  return {
+    projects: owned.projects.length,
+    claims: owned.capabilities.length,
+    evidence: owned.evidence.length,
+    results: owned.results.length,
+  };
+}
+
 export interface Store {
   read(): Promise<Snapshot>;
   upsertCandidate(candidate: Candidate): Promise<void>;
@@ -244,6 +318,15 @@ export interface Store {
   linkTechnologies(projectId: string, technologyIds: string[]): Promise<void>;
   linkCapabilities(projectId: string, capabilityIds: string[]): Promise<void>;
   saveRole(role: Role): Promise<void>;
+  /**
+   * Remove one candidate and everything they own — Projects, Capabilities, Evidence, and their Results
+   * rows on every posting. Technologies and Roles survive: see `ownedRows` above.
+   *
+   * Throws `ProtectedCandidateError` for `DEFAULT_CANDIDATE_ID` and `UnknownCandidateError` for an id
+   * the store does not have. Returns nothing — a caller who wants counts reads them off the snapshot
+   * with `deletionCounts` BEFORE calling, which keeps one shape of truth for both adapters.
+   */
+  deleteCandidate(candidateId: string): Promise<void>;
   /** Human-readable name of the backing store, shown in the UI header. */
   readonly label: string;
 }

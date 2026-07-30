@@ -297,8 +297,10 @@ describe('candidate isolation in matchRole', () => {
 
 describe('the v3 regression anchor', () => {
   it('still scores the bundled posting 75 — 10 proven, 4 partial, 2 gaps across 16 requirements', async () => {
-    // Pinned exactly (DESIGN.md §v3.5). Joel × Arootah is the number the demo stands on, and the
-    // candidate-scoping migration is not allowed to move it.
+    // Pinned exactly (DESIGN.md §v3.5). Joel × the bundled posting is the number the demo stands on,
+    // and the candidate-scoping migration is not allowed to move it. Anonymising the sample (2026-07-30)
+    // was held to the same bar: the company name changed, not one requirement bullet, and these five
+    // numbers did not move.
     const report = await matchRole(SAMPLE_POSTING, new LocalStore(), keyless);
 
     expect(report.role.requirements).toHaveLength(16);

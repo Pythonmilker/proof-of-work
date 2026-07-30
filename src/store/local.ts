@@ -11,7 +11,20 @@
  */
 
 import { seedSnapshot } from './seed';
-import type { Candidate, Capability, Evidence, Project, Role, Snapshot, Store, Technology } from './types';
+import {
+  DEFAULT_CANDIDATE_ID,
+  ProtectedCandidateError,
+  UnknownCandidateError,
+  ownedRows,
+  type Candidate,
+  type Capability,
+  type Evidence,
+  type Project,
+  type Role,
+  type Snapshot,
+  type Store,
+  type Technology,
+} from './types';
 
 export interface Persistence {
   load(): Snapshot | null;
@@ -132,8 +145,20 @@ export class LocalStore implements Store {
     this.flush();
   }
 
+  /**
+   * A Role is global; its Results are per-candidate.
+   *
+   * Replacing the row wholesale used to drop every other applicant's results for that posting, so
+   * scoring a second applicant against the same posting on the same day silently erased the first
+   * one — the exact thing v3 exists to do. Airtable never had the bug because it upserts Results by
+   * key. Here the incoming candidate's rows replace only their own; everyone else's survive.
+   */
   async saveRole(role: Role): Promise<void> {
-    this.snapshot = { ...this.snapshot, roles: upsertById(this.snapshot.roles, role) };
+    const existing = this.snapshot.roles.find((r) => r.id === role.id);
+    const incomingCandidates = new Set(role.results.map((r) => r.candidate));
+    const kept = (existing?.results ?? []).filter((r) => !incomingCandidates.has(r.candidate));
+    const merged: Role = { ...role, results: [...kept, ...role.results] };
+    this.snapshot = { ...this.snapshot, roles: upsertById(this.snapshot.roles, merged) };
     this.flush();
   }
 
@@ -144,6 +169,65 @@ export class LocalStore implements Store {
 
   async upsertCapability(capability: Capability): Promise<void> {
     this.snapshot = { ...this.snapshot, capabilities: upsertById(this.snapshot.capabilities, capability) };
+    this.flush();
+  }
+
+  /**
+   * Delete one candidate and everything they own.  (DESIGN.md §v3.2 — the ownership map)
+   *
+   * Two things make this more than a filter. First, the seeded candidate is refused HERE rather than
+   * only in the UI: the same store answers the API, and a guard that only exists in a button is a
+   * guard anyone can curl around. Second, removing rows is the easy half — the hard half is that
+   * something still POINTS at them. Airtable maintains the reverse side of a link for free; here it is
+   * manual, and a Technology left holding the id of a deleted project is this schema's recurring bug.
+   * So every link array in the snapshot is walked, in every direction, against one set of dead ids.
+   */
+  async deleteCandidate(candidateId: string): Promise<void> {
+    if (candidateId === DEFAULT_CANDIDATE_ID) throw new ProtectedCandidateError(candidateId);
+    const snapshot = this.snapshot;
+    if (!snapshot.candidates.some((c) => c.id === candidateId)) throw new UnknownCandidateError(candidateId);
+
+    const owned = ownedRows(snapshot, candidateId);
+    const gone = new Set([candidateId, ...owned.projects, ...owned.capabilities, ...owned.evidence]);
+    const keep = (ids: readonly string[]): string[] => ids.filter((id) => !gone.has(id));
+
+    this.snapshot = {
+      candidates: snapshot.candidates.filter((c) => c.id !== candidateId),
+      // Surviving rows keep their own links, minus anything that no longer exists. Another candidate's
+      // rows cannot legitimately reference these — matching is candidate-scoped — but a dangling link
+      // is not the kind of thing to leave to an invariant holding somewhere else.
+      projects: snapshot.projects
+        .filter((p) => !gone.has(p.id))
+        .map((p) => ({
+          ...p,
+          technologies: keep(p.technologies),
+          capabilities: keep(p.capabilities),
+          evidence: keep(p.evidence),
+        })),
+      // Global, and the one row that always needs scrubbing: a Technology's `projects` is the reverse
+      // side of a link owned by the candidate.
+      technologies: snapshot.technologies.map((t) => ({ ...t, projects: keep(t.projects) })),
+      capabilities: snapshot.capabilities
+        .filter((c) => !gone.has(c.id))
+        .map((c) => ({ ...c, projects: keep(c.projects), evidence: keep(c.evidence) })),
+      evidence: snapshot.evidence
+        .filter((e) => !gone.has(e.id))
+        .map((e) => ({ ...e, projects: keep(e.projects) })),
+      // The Role row and its requirements stay — a posting is scoreable by anyone. Only this
+      // candidate's Results rows go.
+      roles: snapshot.roles.map((role) => ({
+        ...role,
+        results: role.results
+          .filter((r) => r.candidate !== candidateId)
+          .map((r) => ({
+            ...r,
+            matchedTechnologies: keep(r.matchedTechnologies),
+            matchedCapabilities: keep(r.matchedCapabilities),
+            matchedProjects: keep(r.matchedProjects),
+            evidence: keep(r.evidence),
+          })),
+      })),
+    };
     this.flush();
   }
 

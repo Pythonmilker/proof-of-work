@@ -12,6 +12,9 @@ import { defineConfig, loadEnv, type Plugin } from 'vite';
  * With no key set, the browser runs the very same pipeline module client-side on the deterministic
  * path, so `pnpm build` produces a static site that still works end to end. See src/pipeline/README.
  */
+/** `DELETE /api/candidates/<id>` — the one route with an id in the path, allowlisted by this prefix. */
+const CANDIDATE_PREFIX = '/api/candidates/';
+
 function pipelineApi(env: Record<string, string>): Plugin {
   return {
     name: 'proof-of-work-api',
@@ -32,7 +35,8 @@ function pipelineApi(env: Record<string, string>): Plugin {
           };
 
           // Reads are GETs so they can be opened in a browser tab while debugging; everything that
-          // changes state is a POST.
+          // changes state is a POST, except removing an applicant, which is a DELETE on that
+          // applicant's own URL.
           if (req.method === 'GET') {
             const reads = ['/api/health', '/api/snapshot', '/api/candidates', '/api/pipeline/health'];
             if (reads.includes(req.url)) {
@@ -40,7 +44,22 @@ function pipelineApi(env: Record<string, string>): Plugin {
             }
             return respond(404, { error: `unknown endpoint: ${req.url}` });
           }
+
+          // The one DELETE. The id travels in the path so the route reads as a resource, and the
+          // handler keeps its exact-match switch: the id is handed over in the body.
+          if (req.method === 'DELETE') {
+            const id = req.url.startsWith(CANDIDATE_PREFIX) ? req.url.slice(CANDIDATE_PREFIX.length) : '';
+            if (!id || id.includes('/')) return respond(404, { error: `unknown endpoint: ${req.url}` });
+            return respond(
+              200,
+              await api.handle('/api/candidates/delete', { candidateId: decodeURIComponent(id) }, env),
+            );
+          }
+
           if (req.method !== 'POST') return respond(405, { error: 'method not allowed' });
+          // A DELETE-only route must not be reachable by POST — otherwise the method is decoration and
+          // the handler's delete case has a second, unguarded door.
+          if (req.url.startsWith(CANDIDATE_PREFIX)) return respond(405, { error: 'method not allowed' });
 
           const chunks: Buffer[] = [];
           for await (const chunk of req) chunks.push(chunk as Buffer);

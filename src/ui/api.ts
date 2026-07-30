@@ -26,7 +26,7 @@ import {
 import { createBrowserStore } from '../store';
 import type { LocalStore } from '../store/local';
 import type { ModeReport } from '../store';
-import type { Snapshot } from '../store/types';
+import { deletionCounts, type Snapshot } from '../store/types';
 
 export type Backend = 'n8n' | 'server' | 'browser';
 
@@ -343,6 +343,41 @@ export async function snapshot(): Promise<Snapshot | null> {
     return (await response.json()) as Snapshot;
   }
   return localStore().read();
+}
+
+/** What a delete removed. The roster reports these verbatim rather than saying "done". */
+export interface DeleteResult {
+  candidateId: string;
+  name: string;
+  removed: { projects: number; claims: number; evidence: number; results: number };
+}
+
+/**
+ * Remove one applicant and everything they own.
+ *
+ * Three lanes, same as everything else here. n8n refuses for the reason `ingestResume` refuses: no
+ * workflow deletes rows, and running this against the local store while the header says the record
+ * lives in Airtable is the boundary lie. The seeded applicant is refused by the store and by the
+ * server; the roster additionally never renders a control for it, so this throws only if someone
+ * reaches past the UI.
+ */
+export async function deleteCandidate(candidateId: string): Promise<DeleteResult> {
+  if (resolved === 'n8n') {
+    throw new Error('The record lives in Airtable and no workflow removes rows; delete it in the base');
+  }
+  if (resolved === 'server') {
+    const response = await fetch(`/api/candidates/${encodeURIComponent(candidateId)}`, { method: 'DELETE' });
+    const payload = (await response.json()) as DeleteResult & { error?: string };
+    if (!response.ok || payload.error) throw new Error(payload.error ?? `HTTP ${response.status}`);
+    return payload;
+  }
+  const store = localStore();
+  const before = await store.read();
+  const candidate = before.candidates.find((c) => c.id === candidateId);
+  if (!candidate) throw new Error(`no applicant on file with id ${candidateId}`);
+  const removed = deletionCounts(before, candidateId);
+  await store.deleteCandidate(candidateId);
+  return { candidateId, name: candidate.name, removed };
 }
 
 export async function reset(): Promise<{ ok: boolean; reason?: string }> {

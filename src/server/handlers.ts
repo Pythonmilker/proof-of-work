@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { ingest, ingestResume, matchRole } from '../pipeline';
 import { LocalStore } from '../store/local';
 import { AirtableStore, detectMode, probe, type Env } from '../store';
-import type { Store } from '../store/types';
+import { DEFAULT_CANDIDATE_ID, deletionCounts, type Store } from '../store/types';
 import { filePersistence } from './persistence';
 
 const STATE_FILE = join(process.cwd(), 'data', 'session.json');
@@ -223,6 +223,33 @@ export async function handle(path: string, body: unknown, rawEnv: Record<string,
           };
         }),
       };
+    }
+
+    /**
+     * DELETE one applicant.  (vite.config.ts maps `DELETE /api/candidates/<id>` onto this)
+     *
+     * The counts are read off the snapshot BEFORE the delete and returned, so the roster can report
+     * what actually went rather than claiming a number it did not check. The seeded candidate is
+     * refused here as well as in the store: the store guard is the one that cannot be curled around,
+     * and this one turns it into a labeled 403 instead of a 500.
+     */
+    case '/api/candidates/delete': {
+      const candidateId = typeof input['candidateId'] === 'string' ? input['candidateId'].trim() : '';
+      if (!candidateId) throw new HttpError('no applicant id supplied', 400);
+      if (candidateId === DEFAULT_CANDIDATE_ID) {
+        throw new HttpError(
+          `${DEFAULT_CANDIDATE_ID} is the seeded applicant — the worked example the product ships with — and cannot be deleted`,
+          403,
+        );
+      }
+      const store = storeFor(env);
+      const before = await store.read();
+      const candidate = before.candidates.find((c) => c.id === candidateId);
+      if (!candidate) throw new HttpError(`no applicant on file with id ${candidateId}`, 404);
+
+      const removed = deletionCounts(before, candidateId);
+      await store.deleteCandidate(candidateId);
+      return { ok: true, candidateId, name: candidate.name, removed };
     }
 
     case '/api/sample': {

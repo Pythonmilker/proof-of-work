@@ -128,21 +128,37 @@ describe('the raw fixtures agree with the seed', () => {
     }
   });
 
-  it("keeps the Arootah figures out of OUR prose, while the posting quotes its own", () => {
-    // "700+ vetted advisors" and "600+ coaches" are not on arootah.com (checked 2026-07-27) but ARE in
-    // the LinkedIn posting itself (captured 2026-07-28) — so the posting text may carry them, because
-    // they are the company quoting the company. Our own artifacts still may not: a figure we cannot
-    // source from the site or the posting stays out of our mouths.
-    expect(allRaw).not.toMatch(/700\+?\s*(vetted\s*)?advisors/i);
-    expect(allRaw).not.toMatch(/600\+?\s*coaches/i);
-    expect(allRaw).not.toMatch(/time-to-fill/i);
-    expect(SAMPLE_POSTING).toMatch(/700\+[\s\S]{0,3}vetted advisors/i);
-    expect(SAMPLE_POSTING).toMatch(/600\+ coaches/i);
+  it('keeps company-identifying figures out of the sample AND out of our prose', () => {
+    // This assertion used to run the other way for the sample: "700+ vetted advisors" and "600+
+    // coaches" are absent from the company's own site but WERE in the posting, so quoting them was the
+    // company quoting itself and the sample was allowed to carry them.
+    //
+    // That rationale died with the anonymisation. The demo now ships publicly and recruiters at other
+    // companies open it, so the bundled sample names a company that does not exist and carries no
+    // "About" blurb at all — no headcounts, no industry description, no learn-more URL. A figure that
+    // identifies a real company has nowhere left to live, here or in raw/, and the ban on our own
+    // prose is unchanged.
+    for (const figure of [/700\+?\s*(vetted\s*)?advisors/i, /600\+?\s*coaches/i, /time-to-fill/i]) {
+      expect(allRaw, `raw/ quotes ${figure}`).not.toMatch(figure);
+      expect(SAMPLE_POSTING, `the sample quotes ${figure}`).not.toMatch(figure);
+    }
+    expect(SAMPLE_POSTING).not.toMatch(/arootah/i);
+    expect(SAMPLE_POSTING).not.toMatch(/18 functional disciplines/i);
   });
 
-  it('carries the posting verbatim, including the figure the site also confirms', () => {
-    expect(SAMPLE_POSTING).toMatch(/18 functional disciplines/i);
-    expect(SAMPLE_POSTING).toMatch(/Claude Code/);
+  it('keeps every requirement bullet byte-identical through the anonymisation', () => {
+    // Only the company name and its blurb changed. The bullets are what the deterministic reader
+    // parses and what the pinned anchor stands on (tests/resume.test.ts: 16 requirements, 75 percent),
+    // so a reworded bullet is a moved anchor even when the count survives.
+    for (const bullet of [
+      '- Build and maintain full-stack web and mobile-friendly applications, including React-based front ends and their supporting data layers',
+      '- Design and maintain Airtable bases (schema, automations, interfaces, and data quality) that back internal and client-facing tools',
+      '- Strong experience using Airtable as an application backend (linked records, automations, interfaces)',
+      "- Familiarity with Claude Code (Anthropic's agentic coding tool), or a willingness to adopt it to ship quickly",
+    ]) {
+      expect(SAMPLE_POSTING).toContain(bullet);
+    }
+    expect(SAMPLE_POSTING.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(16);
   });
 });
 

@@ -66,9 +66,9 @@ land. Three of the twelve files in `raw/` show different pipeline branches:
 | `11-broken-fragment.txt` | Nothing checkable in it | Validation fails, row parked in Needs Review |
 
 Then open Score, pick an applicant, and press the button, which names whose fit it scores. The bundled
-posting is the actual Arootah posting, captured 2026-07-28, and the seeded record scores 75 percent
-against it: 10 of its 16 requirements proven, 4 partial, 2 gaps. That posting marks everything as
-required, so the required tally is the whole tally.
+posting carries a real posting's requirements under an invented company name, and the seeded record
+scores 75 percent against it: 10 of its 16 requirements proven, 4 partial, 2 gaps. That posting marks
+everything as required, so the required tally is the whole tally.
 
 ## Going live
 
@@ -228,9 +228,11 @@ and misses capabilities a posting only describes. The header says `lexical` when
 The Zap polls on Zapier's schedule, up to 15 minutes on the free plan. A webhook trigger would be
 immediate and needs a paid plan.
 
-The bundled posting in `src/ui/sample-posting.ts` is the actual LinkedIn posting, captured 2026-07-28,
-with the board chrome (tracking URLs, applicant counts) stripped and the pay/hours header line assembled
-from the posting's own figures. Scoring a different posting means pasting it into the box.
+The bundled posting in `src/ui/sample-posting.ts` keeps a real posting's requirement bullets word for
+word and nothing else. The company is Northwind Systems, which does not exist, and the "About" blurb is
+gone — headcounts, industry description, learn-more URL and all. The demo is public, so a named company
+sitting in a shipped fixture reads as leftover data rather than as a sample. Scoring a different posting
+means pasting it into the box.
 
 ## Why Airtable
 
