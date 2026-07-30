@@ -66,10 +66,15 @@ run, verified row for row before writing.
   one tool covers both.
 - **Plain CSS, no Tailwind.** The screenshots are a deliverable and a build that cannot break is worth
   more than utility classes.
-- **Deterministic-first posting parse (2026-07-28).** With a key live, gpt-4o-mini scored the real
-  posting 66% over 18 paraphrased rows, including "strong problem-solving skills" as a minted gap.
-  Code reads structured postings verbatim (75%, 16 rows); the model reads prose-heavy ones (under 4
-  bullets found). Verified verdict-identical under full model mode before the flip.
+- **Posting parse routed on shape, not on count (2026-07-28, re-measured 2026-07-30).** With a key
+  live, gpt-4o-mini scored the real posting 66% over 18 paraphrased rows, including "strong
+  problem-solving skills" as a minted gap. Code reads it verbatim: 75%, 16 rows. The original gate was
+  "the deterministic reader found >= 4 requirements, so skip the model" — which stopped being the right
+  test the moment passes 2 and 3 landed, because unstructured text now clears 4 on sentence heuristics
+  and the model never ran on prose, the one shape it reads better. The gate is now the PASS that
+  answered: bulleted or unmarked → code, no model call; prose or nothing → model when a key is set,
+  deterministic as the fallback. Re-measured on five fixtures — details in the header of
+  `src/pipeline/jd.ts`, pinned in `tests/jd.test.ts`. Anchor unmoved: 75 / 10 / 4 / 2 / 16.
 
 ## Bugs found and fixed during the build
 

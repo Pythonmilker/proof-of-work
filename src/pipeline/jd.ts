@@ -1,15 +1,39 @@
 /**
  * Stage 4 step 1: a pasted job description becomes a list of requirements.  (DESIGN.md §6.1)
  *
- * The deterministic reader runs first and wins whenever the posting is structured, because job
- * postings are bullet lists and bullet lists parse — keeping the posting's own words, which the
- * recruiter recognises and which anchor matching better than a paraphrase. The model is the path for
- * prose-heavy postings, where there are no bullets to read.
+ * Which reader answers is decided by the SHAPE of the posting, and the shape is whichever of the
+ * deterministic reader's three passes put the requirements on the table:
  *
- * That ordering was learned, not assumed. On the real posting this project was built against, the model
- * paraphrased bullets into noun phrases (dropping the React anchor from two of them), split one prose
- * paragraph into double-counted rows, and minted "strong problem-solving skills" as a gap — a fabricated
- * failure, in the report whose whole argument is that its failures are real.
+ *   pass 1  bulleted       an explicit list                → read in code, no model call
+ *   pass 2  unmarked list  lines under a requirement head  → read in code, no model call
+ *   pass 3  prose          sentences, no list at all       → read by the model when a key is set
+ *
+ * A list is read in code because a list parses and the posting's own words survive — the recruiter
+ * recognises them, and they anchor matching better than a paraphrase. Prose goes to the model because
+ * there is no list for code to read, and sentence heuristics return sentences, not requirements.
+ *
+ * Every line of that was measured, not assumed.
+ *
+ * BULLETED. On the real posting this project was built against, the model scored 66 percent over 18
+ * paraphrased rows — dropping the React anchor from two bullets, double-counting one prose paragraph,
+ * and minting "strong problem-solving skills" as a gap. A fabricated failure, in the report whose whole
+ * argument is that its failures are real. Code reads the same posting as 16 verbatim rows, scoring 75.
+ *
+ * UNMARKED. This is what a LinkedIn paste actually is: the bullet glyphs are not selectable, so they
+ * never reach the clipboard while the line breaks do. Measured on the sample posting with every marker
+ * stripped, code returned all 16 requirement lines verbatim; the model returned 13 paraphrases, dropped
+ * the collaborate, document and sole-engineer bullets outright, invented "experience with low-code
+ * platforms", and marked five must-haves preferred on a posting that has no nice-to-have section. Two
+ * further unmarked postings repeated it — 12 verbatim rows against 8, and 10 against 12 where the
+ * model's extra rows were splits of a single line. So "the posting is not bulleted" was the wrong thing
+ * to hand the model. What matters is whether there is a list, not whether someone marked it.
+ *
+ * PROSE. Here the model earns its keep. On two prose postings, code returned the company introducing
+ * itself ("We have been at this for six years and we still ship every week"), read a title line as a
+ * requirement, returned whole sentences instead of asks, and silently dropped a 232-character sentence
+ * carrying three requirements for being over its length cap. The model returned 11 and 10 clean noun
+ * phrases with nothing invented. Prose is the one shape where a paraphrase beats a verbatim read,
+ * because there is nothing verbatim to read.
  *
  * The reader has THREE passes, and passes 2 and 3 were added after a measurement rather than a hunch.
  * Only an explicit bullet marker counted as an item, so a typical LinkedIn paste — a heading, then plain
@@ -99,13 +123,24 @@ const VALID_CATEGORY = new Set<RequirementCategory>([
 ]);
 
 /**
- * How many requirements the deterministic reader must find for its result to be preferred outright.
- * At or above this the posting is structured and code reads it verbatim; below it the posting is
- * prose-heavy and the model earns its keep.
+ * How many requirements a pass must find before the reader stops trying the next one.
  *
- * The same number gates each pass: a pass runs only when everything before it left the reader short.
+ * It gates the passes INSIDE the reader, and nothing else. It used to gate the outer decision as well —
+ * "found four, so do not call the model" — and that is the ordering this file corrected. Once passes 2
+ * and 3 existed, unstructured text cleared the bar on sentence heuristics, so the model stopped running
+ * on exactly the input it reads best. What decides now is which pass answered, not how many rows it
+ * happened to return.
  */
 const STRUCTURED_MINIMUM = 4;
+
+/**
+ * The passes whose result is taken as-is, with no model call at all.
+ *
+ * Both read the posting's own lines: pass 1 off explicit markers, pass 2 off the lines under a
+ * requirement heading. Pass 3 is absent on purpose — prose is the shape the model reads better (see the
+ * header), so a prose posting falls through rather than being answered from sentence heuristics.
+ */
+const READ_VERBATIM: ReadonlySet<ParsePass> = new Set<ParsePass>(['bulleted', 'unmarked']);
 
 /**
  * What the reader tells the reviewer when the requirements did not come off a bullet list.
@@ -121,7 +156,21 @@ const PASS_NOTES: Record<ParsePass, string | null> = {
   prose: 'This posting has no list at all, so its requirements were read from its sentences.',
 };
 
-/** Only a model that was *expected* and failed is a degradation worth naming. */
+/**
+ * What the reader tells the reviewer when the model read the posting.
+ *
+ * Same rule as PASS_NOTES: a whole sentence, saying what happened. The model running on a prose posting
+ * is the designed path rather than a degradation, so this states it plainly instead of apologising for
+ * it — and naming the engine matters, because a paraphrased row and a verbatim one are worth different
+ * amounts to someone checking the report against the posting they wrote.
+ */
+const MODEL_PARSED_NOTE =
+  'This posting has no list, so its requirements were read by the posting-parsing model rather than in code.';
+
+/**
+ * Only a model that was *expected* and failed is a degradation worth naming — which, since the reorder,
+ * is every failure that reaches here: the model is now called only on the shape it is the primary for.
+ */
 function modelUnavailable(reason: string, passNote: string | null): string {
   const base = `The posting-parsing model was unavailable (${reason}), so the posting was read in code instead.`;
   return passNote ? `${base} ${passNote}` : base;
@@ -131,15 +180,17 @@ export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOu
   const deterministic = parseRoleDeterministically(text);
   const passNote = deterministic.pass ? PASS_NOTES[deterministic.pass] : null;
 
-  if (deterministic.requirements.length >= STRUCTURED_MINIMUM) {
-    // Not a fallback — the designed primary for structured postings. A bulleted read carries no note;
-    // an unmarked or prose read carries one, because the reader had to work harder for it.
+  if (deterministic.pass !== null && READ_VERBATIM.has(deterministic.pass)) {
+    // The posting is a list, marked or not, so code already has its own words and the model is not
+    // consulted. Not a fallback — the designed primary for a posting with a list in it. A bulleted read
+    // carries no note; an unmarked one carries one, because the reader had to lean on the headings to
+    // know those lines were a list at all.
     return { role: deterministic, via: 'deterministic', model: 'none', note: passNote };
   }
 
-  // No key means there is no model to fall to, so there is no degradation to report — only what the
-  // reader did. The header already states the missing key once; repeating it per run reads as a
-  // failure on the hosted demo, where a key is never coming.
+  // Prose, or nothing readable at all. No key means there is no model to reach for, so there is no
+  // degradation to report — only what the reader did. The header already states the missing key once;
+  // repeating it per run reads as a failure on the hosted demo, where a key is never coming.
   if (!opts.apiKey) {
     if (deterministic.requirements.length === 0) {
       throw new UnreadablePostingError(passNote);
@@ -175,7 +226,7 @@ export async function parseRole(text: string, opts: LlmOptions): Promise<ParseOu
     return { role: deterministic, via: 'deterministic', model: 'none', note };
   }
 
-  return { role: parsed, via: 'model', model: result.model, note: null };
+  return { role: parsed, via: 'model', model: result.model, note: MODEL_PARSED_NOTE };
 }
 
 /** Re-validate the reply as untrusted input, same as everywhere else. */
