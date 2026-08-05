@@ -92,7 +92,12 @@ export default defineConfig(({ mode }) => {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
     server: { port: 5273, strictPort: false },
-    build: { outDir: 'dist', sourcemap: true },
+    // Sourcemaps off for the shipped build. They embed the full original source — 1.4 MB of it — at a
+    // public URL, which contradicts the boundary this product claims (DESIGN.md §v3.7: the client
+    // carries nothing worth reading). They held no secrets, only env-var NAMES in code and comments,
+    // but publishing the entire codebase to anyone who opens devtools is not what "self-contained
+    // client with nothing exploitable in it" means. Local builds can flip this back when debugging.
+    build: { outDir: 'dist', sourcemap: false },
     test: {
       environment: 'node',
       include: ['tests/**/*.test.ts'],

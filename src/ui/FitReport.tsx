@@ -13,7 +13,13 @@
 import { useState } from 'react';
 import type { CoverageStatus, Requirement, Snapshot } from '../store/types';
 import type { MatchState } from './App';
-import { AIRTABLE_BASE_URL, AIRTABLE_REPORT_URL, type Backend, type MatchReport } from './api';
+import {
+  AIRTABLE_BASE_URL,
+  AIRTABLE_REPORT_URL,
+  MODEL_PROXY_HOST,
+  type Backend,
+  type MatchReport,
+} from './api';
 
 const MARKER: Record<CoverageStatus, string> = { proven: '●', partial: '◐', gap: '○' };
 
@@ -357,10 +363,14 @@ export function FitReport({
         <p className="section-label">Where this lands in production</p>
         <p className="cta-sub">
           {/* "In your browser" is only true on the static build; under the dev server the run
-              happens in Node against a local store. Saying the wrong one is a small lie in the app
-              whose whole argument is that it does not tell them. */}
+              happens in Node against a local store. And "stays there" stops being true the moment a
+              model call leaves the page — with a proxy configured the posting text goes to it, so the
+              sentence names the host instead of claiming nothing moved. Saying the wrong one is a
+              small lie in the app whose whole argument is that it does not tell them. */}
           {backend === 'browser'
-            ? 'This run scored in your browser and stays there.'
+            ? MODEL_PROXY_HOST
+              ? `This run scored in your browser. The posting text went to the model proxy at ${MODEL_PROXY_HOST} and on to the model; nothing else left the page.`
+              : 'This run scored in your browser and stays there.'
             : 'This run scored locally and stays on this machine.'}{' '}
           In production every run is delivered to Airtable, where a recruiter reads it without
           logging in. The link opens one real delivered report as an example.

@@ -6,7 +6,7 @@
  * them into one error is how a dead credential hides behind a working demo for a week.
  */
 
-import { CHAT_ENDPOINT, buildJsonRequest, modelChain, type JsonRequestSpec } from './protocol';
+import { buildJsonRequest, chatEndpoint, modelChain, type JsonRequestSpec } from './protocol';
 
 export type LlmFailureKind =
   | 'no_key'
@@ -27,6 +27,15 @@ const TIMEOUT_MS = 45_000;
 
 export interface LlmOptions {
   apiKey: string | undefined;
+  /**
+   * Base URL of the keyless model proxy (see protocol.ts). Set, it moves both endpoints onto the relay
+   * and takes the key off the wire completely — the browser sends no Authorization header because it
+   * has nothing to send. Unset, every line below behaves exactly as it did.
+   *
+   * Presence IS the transport: there is no second `transport: 'direct' | 'proxy'` field to fall out of
+   * step with it. A discriminant plus an address can disagree; an address cannot disagree with itself.
+   */
+  proxyBase?: string | undefined;
   /** Injectable for tests. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
   /** Overrides the tier's primary model. Used by `--model` on the CLI. */
@@ -34,11 +43,27 @@ export interface LlmOptions {
 }
 
 /**
+ * Is there anywhere to send a model call?
+ *
+ * The question every gate in the pipeline is actually asking when it tests `opts.apiKey`. A key of our
+ * own and a relay that holds one are both a yes, and spelling it out once stops the two lanes drifting
+ * apart one guard at a time.
+ */
+export function modelReachable(opts: Pick<LlmOptions, 'apiKey' | 'proxyBase'>): boolean {
+  return Boolean(opts.apiKey || opts.proxyBase);
+}
+
+/**
  * One structured-output call. Returns the parsed object or a typed failure — never a thrown error and
  * never a half-parsed value.
  */
 export async function callJson<T>(spec: JsonRequestSpec, opts: LlmOptions): Promise<LlmResult<T>> {
-  if (!opts.apiKey) return { ok: false, error: { kind: 'no_key' } };
+  // A key or a relay: either one means there is somewhere to send this. On the proxy lane the caller
+  // holds no key BY DESIGN — the relay attaches one server-side — so bailing on `!apiKey` alone would
+  // report a working configuration as a missing credential and take the hosted build off the model
+  // path entirely. Neither of the two is still an honest `no_key`.
+  const viaProxy = Boolean(opts.proxyBase);
+  if (!modelReachable(opts)) return { ok: false, error: { kind: 'no_key' } };
 
   const doFetch = opts.fetchImpl ?? fetch;
   const body = buildJsonRequest(
@@ -50,15 +75,21 @@ export async function callJson<T>(spec: JsonRequestSpec, opts: LlmOptions): Prom
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const response = await doFetch(CHAT_ENDPOINT, {
+    const response = await doFetch(chatEndpoint(opts.proxyBase), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${opts.apiKey}`,
-        // OpenRouter attributes traffic with these. Harmless, and it keeps the dashboard readable.
-        'HTTP-Referer': 'https://github.com/jbrannan/proof-of-work',
-        'X-Title': 'Proof of Work',
-      },
+      headers: viaProxy
+        ? // The content type and nothing else. The relay holds the key and ignores whatever
+          // Authorization it is handed, so sending a placeholder would put something key-shaped on the
+          // wire for no reason at all — and the attribution headers below belong to whoever is
+          // actually paying for the traffic, which on this lane is the relay.
+          { 'Content-Type': 'application/json' }
+        : {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${opts.apiKey}`,
+            // OpenRouter attributes traffic with these. Harmless, and it keeps the dashboard readable.
+            'HTTP-Referer': 'https://github.com/jbrannan/proof-of-work',
+            'X-Title': 'Proof of Work',
+          },
       signal: controller.signal,
       body: JSON.stringify(body),
     });

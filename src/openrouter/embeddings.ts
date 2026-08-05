@@ -14,7 +14,8 @@
  * entire store for well under a cent.
  */
 
-import { EMBEDDINGS_ENDPOINT } from './protocol';
+import { modelReachable } from './client';
+import { embeddingsEndpoint } from './protocol';
 
 export const EMBEDDING_MODEL = 'qwen/qwen3-embedding-8b';
 
@@ -36,20 +37,32 @@ export interface EmbedResult {
  */
 export async function embed(
   texts: readonly string[],
-  opts: { apiKey: string | undefined; model?: string; fetchImpl?: typeof fetch },
+  opts: {
+    apiKey: string | undefined;
+    /** The keyless relay (see protocol.ts). Set, retrieval runs through it with no key on the wire. */
+    proxyBase?: string | undefined;
+    model?: string;
+    fetchImpl?: typeof fetch;
+  },
 ): Promise<EmbedResult> {
   const model = opts.model ?? EMBEDDING_MODEL;
-  if (!opts.apiKey) return { ok: false, vectors: [], model, detail: 'no key' };
+  // Same rule as callJson: a key or a relay is enough. Without this the hosted build would hold a
+  // working embeddings path and refuse to use it, and the report would label real hybrid retrieval
+  // "lexical only (no key set)" — a false degradation, which is as bad as a hidden one.
+  const viaProxy = Boolean(opts.proxyBase);
+  if (!modelReachable(opts)) return { ok: false, vectors: [], model, detail: 'no key' };
   if (texts.length === 0) return { ok: true, vectors: [], model };
 
   const doFetch = opts.fetchImpl ?? fetch;
   try {
-    const response = await doFetch(EMBEDDINGS_ENDPOINT, {
+    const response = await doFetch(embeddingsEndpoint(opts.proxyBase), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${opts.apiKey}`,
-      },
+      headers: viaProxy
+        ? { 'Content-Type': 'application/json' }
+        : {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${opts.apiKey}`,
+          },
       body: JSON.stringify({ model, input: texts, encoding_format: 'float' }),
     });
 

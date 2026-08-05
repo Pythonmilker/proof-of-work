@@ -26,6 +26,52 @@ export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 export const CHAT_ENDPOINT = `${OPENROUTER_BASE}/chat/completions`;
 export const EMBEDDINGS_ENDPOINT = `${OPENROUTER_BASE}/embeddings`;
 
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * The keyless lane.
+ *
+ * `VITE_MODEL_PROXY_BASE` — read in src/ui/api.ts, the one place this repo reads VITE_ vars, and
+ * threaded down as `proxyBase` on LlmOptions — points at a relay that speaks these same two endpoints
+ * and holds the OpenRouter key on its own side. That is how the hosted static build runs the full
+ * model path while shipping no credential: a VITE_ variable is bundled into client code and readable
+ * by anyone, so the only thing safe to put in one is an ADDRESS. Never a key.
+ *
+ * Nothing else about a request changes on this lane: same chains, same schemas, same two guards. One
+ * switch, one transport, no second protocol to keep in sync.
+ *
+ * OPENROUTER_BASE above deliberately stays the real base rather than being repointed at the relay.
+ * `probe()` in src/store/index.ts asks it for `/key` and `/embeddings/models` — routes the relay does
+ * not expose and answers 404 on — so repointing the shared constant would turn `pnpm doctor` into two
+ * false "unreachable" lines. The proxy is a per-call transport, not a global rename.
+ * ───────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** Where a chat call goes: the relay when one is configured, OpenRouter when it is not. */
+export function chatEndpoint(proxyBase?: string | undefined): string {
+  return proxyBase ? `${proxyBase.replace(/\/+$/, '')}/chat/completions` : CHAT_ENDPOINT;
+}
+
+/** Same switch for retrieval. Both endpoints move together or neither does. */
+export function embeddingsEndpoint(proxyBase?: string | undefined): string {
+  return proxyBase ? `${proxyBase.replace(/\/+$/, '')}/embeddings` : EMBEDDINGS_ENDPOINT;
+}
+
+/**
+ * What the browser lane threads as `apiKey` when it is running through the relay. It is a placeholder,
+ * not a credential, and it never reaches the wire — client.ts and embeddings.ts send NO Authorization
+ * header at all once `proxyBase` is set.
+ *
+ * It exists for exactly one guard: the prose branch of src/pipeline/jd.ts, which asks "is a model
+ * reachable?" by testing `opts.apiKey` and, on a posting with no list in it, routes to the model or to
+ * the deterministic reader on the answer. The other two gates that asked the same question that way —
+ * `buildVectors` and the rationale gate in src/pipeline/index.ts — now ask `modelReachable(opts)`
+ * instead and need no placeholder. A lane that answered no would quietly drop the hosted build back
+ * onto the deterministic path while the header claimed the models were live: the exact silent fallback
+ * this codebase is built against.
+ *
+ * The value is deliberately a sentence rather than something key-shaped. If it ever does escape into a
+ * log or a screenshot, it reads as what it is.
+ */
+export const KEY_HELD_BY_PROXY = 'held-by-the-proxy';
+
 /** Longest blob we will hand an extraction model. Past this it is a file upload, not a paste. */
 export const MAX_INPUT_CHARS = 24_000;
 

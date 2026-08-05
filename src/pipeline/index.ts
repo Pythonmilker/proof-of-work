@@ -13,7 +13,7 @@
  */
 
 import { embed, type Vector } from '../openrouter/embeddings';
-import type { LlmOptions } from '../openrouter/client';
+import { modelReachable, type LlmOptions } from '../openrouter/client';
 import {
   DEFAULT_CANDIDATE_ID,
   type Candidate,
@@ -491,7 +491,10 @@ async function buildVectors(
   const entities = new Map<string, Vector>();
   const reqVectors = new Map<string, Vector>();
 
-  if (!opts.apiKey) {
+  // "Can we reach a model", not "do we hold a key" — the hosted build reaches one through the keyless
+  // relay and holds nothing. Asking the narrower question here would label real hybrid retrieval
+  // "lexical only (no key set)", which is a degradation notice for a degradation that did not happen.
+  if (!modelReachable(opts)) {
     return { entities, requirements: reqVectors, note: 'Retrieval is lexical only (no key set)' };
   }
 
@@ -593,8 +596,9 @@ export async function matchRole(
       shortfall: resolution.shortfall,
     };
 
-    // No key means no call at all — the template is the answer, not a fallback after a wasted request.
-    const rationale = opts.apiKey
+    // Nothing to call means no call at all — the template is the answer, not a fallback after a wasted
+    // request. A relay counts as something to call, so the hosted build writes real sentences.
+    const rationale = modelReachable(opts)
       ? await writeRationale(context, opts)
       : { text: templateRationale(context), source: 'template' as const };
 

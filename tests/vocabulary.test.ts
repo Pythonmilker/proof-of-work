@@ -70,7 +70,22 @@ describe('interface vocabulary', () => {
     const all = files.map((f) => readFileSync(f, 'utf8')).join('\n');
     // 'receipts' joined the list with the landing hero: the claims-to-receipts loop is the product
     // sentence, and the hero saying it is what keeps the landing from reading as a generic dashboard.
-    for (const word of ['Evidence', 'coverage', 'Requirements', 'record', 'Gaps', 'Applicants', 'unverified', 'receipts']) {
+    //
+    // 'live models' joined it with the model proxy. The hosted build runs real model calls through a
+    // relay that holds the key, and the header used to call that "demo · local store · no key" — three
+    // words, two of them false. The wording is pinned here so it cannot drift back to claiming the
+    // models are off while they are running.
+    for (const word of [
+      'Evidence',
+      'coverage',
+      'Requirements',
+      'record',
+      'Gaps',
+      'Applicants',
+      'unverified',
+      'receipts',
+      'live models',
+    ]) {
       expect(all, `the interface never says "${word}"`).toContain(word);
     }
   });

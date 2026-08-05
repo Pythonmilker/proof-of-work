@@ -8,11 +8,15 @@
  *                                      bundle — see DESIGN.md §v3.7.
  *   2. `/api/*` responds             → the Vite dev server, running the pipeline in Node with the key
  *                                      server-side.
- *   3. neither                       → the static build. The same pipeline module runs in the browser on
- *                                      the deterministic path, so `pnpm build` still produces something
- *                                      that works end to end with no server and no credentials.
+ *   3. neither                       → the static build. The same pipeline module runs in the browser,
+ *                                      so `pnpm build` still produces something that works end to end
+ *                                      with no server and no credentials.
  *
  * Which one is in use is reported, never inferred silently. The header says so.
+ *
+ * Orthogonal to all three: `VITE_MODEL_PROXY_BASE` decides where the browser lane's MODEL calls go —
+ * nowhere (deterministic) or through a keyless relay that holds the key server-side. It changes the
+ * transport, never the backend, and it is an address rather than a credential. See MODEL_TRANSPORT.
  */
 
 import {
@@ -23,6 +27,7 @@ import {
   type MatchReport,
   type ResumeIngestResult,
 } from '../pipeline';
+import { KEY_HELD_BY_PROXY } from '../openrouter/protocol';
 import { createBrowserStore } from '../store';
 import type { LocalStore } from '../store/local';
 import type { ModeReport } from '../store';
@@ -57,6 +62,50 @@ const PROXY_MATCH = '/api/pipeline/match';
 /** Where the delivered product lives. Read by the live-mode links, set in .env.local. */
 export const AIRTABLE_BASE_URL = (import.meta.env['VITE_AIRTABLE_BASE_URL'] as string | undefined)?.trim();
 export const AIRTABLE_REPORT_URL = (import.meta.env['VITE_AIRTABLE_REPORT_URL'] as string | undefined)?.trim();
+
+/**
+ * The model transport, decided at BUILD time.
+ *
+ * Set, `VITE_MODEL_PROXY_BASE` is the address of a relay that speaks OpenRouter's two endpoints and
+ * holds the key on its own side, so the hosted static build runs the full model path — real posting
+ * parsing, real embeddings, real written rationales — while shipping no credential. Unset, nothing
+ * changes: local dev keeps its key server-side in Node and the keyless browser lane stays deterministic.
+ *
+ * A VITE_ variable is compiled into client code and readable by anyone who opens the bundle, so the
+ * only thing that may ever go in one is an ADDRESS. Never a key. That rule is why this switch is an
+ * endpoint rather than a credential, and it is the same rule POW_APP_TOKEN obeys by refusing the
+ * prefix entirely (DESIGN.md §v3.7).
+ */
+const MODEL_PROXY_BASE = (import.meta.env['VITE_MODEL_PROXY_BASE'] as string | undefined)?.trim();
+
+/**
+ * What the browser lane hands the pipeline.
+ *
+ * On the proxy lane `apiKey` is KEY_HELD_BY_PROXY — a placeholder, not a credential, and never sent:
+ * client.ts and embeddings.ts drop the Authorization header entirely once `proxyBase` is set. It is
+ * threaded because src/pipeline/jd.ts decides whether a prose posting reaches the model by testing
+ * `opts.apiKey`, and on this lane the honest answer is yes. See KEY_HELD_BY_PROXY in
+ * ../openrouter/protocol.ts for the whole argument.
+ */
+const MODEL_TRANSPORT: { apiKey: string | undefined; proxyBase?: string } = MODEL_PROXY_BASE
+  ? { apiKey: KEY_HELD_BY_PROXY, proxyBase: MODEL_PROXY_BASE }
+  : { apiKey: undefined };
+
+/** Just the host, for the header. The full base is an implementation detail nobody needs in a pill. */
+function proxyHost(base: string): string {
+  try {
+    return new URL(base).host;
+  } catch {
+    return base;
+  }
+}
+
+/**
+ * The relay's host, or null when there is no relay. Read by the fit report, which tells the visitor
+ * where their pasted posting went — "stays in your browser" stops being true the moment a model call
+ * leaves it, and a page arguing that it does not hide degradations cannot hide that.
+ */
+export const MODEL_PROXY_HOST = MODEL_PROXY_BASE ? proxyHost(MODEL_PROXY_BASE) : null;
 
 /**
  * The raw fixtures, bundled at build time.
@@ -173,6 +222,41 @@ export async function health(): Promise<Health> {
   }
 
   resolved = 'browser';
+
+  if (MODEL_PROXY_BASE) {
+    /**
+     * The static build with a relay configured. Chat and embeddings both run, so "no key" would be the
+     * wrong sentence twice: the models ARE live, and the reason this build carries no credential is the
+     * design rather than a missing one. Saying "demo" here would undersell a working model path exactly
+     * as badly as saying "live" over a dead one oversells nothing.
+     *
+     * Shape-only, the same way detectMode() is shape-only next to probe(): this states what the build
+     * is wired to, and every RUN states what actually happened — a relay that fails answers with a typed
+     * failure the report prints verbatim ("read in code instead", "retrieval: lexical"). Probing on load
+     * would spend a real model call on every page view to learn what the first run learns for free.
+     */
+    return {
+      backend: 'browser',
+      store: localStore().label,
+      samples: bundledSamples(),
+      mode: {
+        store: 'local',
+        llm: {
+          state: 'ready',
+          detail:
+            `Model calls run through the keyless proxy at ${proxyHost(MODEL_PROXY_BASE)}, which holds the ` +
+            `key server-side. This build ships no credential${n8nDown ? `. ${n8nDown}` : ''}`,
+        },
+        embeddings: {
+          state: 'ready',
+          detail: 'Embeddings run through the same proxy, so retrieval is hybrid rather than lexical',
+        },
+        airtable: { state: 'absent', detail: 'Using the bundled local store' },
+        label: 'live models · local store',
+      },
+    };
+  }
+
   return {
     backend: 'browser',
     store: localStore().label,
@@ -246,12 +330,13 @@ export async function ingest(blob: string, sourceName: string, candidateId?: str
   if (resolved === 'server') {
     return { kind: 'full', result: await post<IngestResult>('/api/ingest', { blob, sourceName, candidateId }) };
   }
-  // apiKey is deliberately undefined: a browser bundle is a public artifact, and a key in one is a key
-  // anyone can read. The deterministic path is the honest option here, not a compromise.
+  // No key travels with this, ever: a browser bundle is a public artifact, and a key in one is a key
+  // anyone can read. Without a relay configured that means the deterministic path, which is the honest
+  // option rather than a compromise; with one, the models run and the browser still holds nothing.
   return {
     kind: 'full',
     result: await runIngest(blob, sourceName, localStore(), {
-      apiKey: undefined,
+      ...MODEL_TRANSPORT,
       ...(candidateId ? { candidateId } : {}),
     }),
   };
@@ -269,7 +354,7 @@ export async function ingestResume(text: string, sourceName: string): Promise<Re
   if (resolved === 'server') {
     return await post<ResumeIngestResult>('/api/ingest-resume', { text, sourceName });
   }
-  return await runIngestResume(text, sourceName, localStore(), { apiKey: undefined });
+  return await runIngestResume(text, sourceName, localStore(), { ...MODEL_TRANSPORT });
 }
 
 export async function match(text: string, candidateId?: string): Promise<MatchOutcome> {
@@ -283,7 +368,7 @@ export async function match(text: string, candidateId?: string): Promise<MatchOu
   return {
     kind: 'full',
     report: await runMatch(text, localStore(), {
-      apiKey: undefined,
+      ...MODEL_TRANSPORT,
       ...(candidateId ? { candidateId } : {}),
     }),
   };
