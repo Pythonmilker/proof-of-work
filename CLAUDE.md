@@ -19,6 +19,10 @@ Global standards load from `~/.claude/CLAUDE.md`.
   a flattery generator and a reader can tell. `tests/vocabulary.test.ts` enforces it.
 - **The evidence gate stays.** A capability with no linked evidence can never score proven.
   `tests/evidence-gate.test.ts` pins it at a perfect 1.0 match score.
+- **Weighing can only lower a verdict.** `matchRole` resolves every requirement twice — once with no
+  model, once with the weighing model's numbers — and keeps the worse (`worseOf` in score.ts). There
+  is no channel by which a model raises a score. `tests/judge.test.ts` attacks it with the reply a
+  dishonest model would send; DESIGN.md §v3.8 has the reasoning.
 - **Every number traces to a real artifact.** `tests/seed-integrity.test.ts` transcribes the metrics by
   hand from the portfolio ledger and compares. A wrong test count is worse than no test count.
 - **Generic vocabulary.** Candidate, Evidence, Coverage, record. Never "my skills", "About me", "resume".
@@ -30,7 +34,7 @@ Global standards load from `~/.claude/CLAUDE.md`.
 - React 19 + TypeScript + Vite. Hand-written CSS, no framework. Two runtime dependencies.
 - Install: `pnpm install`
 - Run: `pnpm dev` (port 5273)
-- Test: `pnpm test` (209 passing, 3 skipped behind `LIVE_OPENROUTER=1`)
+- Test: `pnpm test` (272 passing across 17 files, 3 skipped behind `LIVE_OPENROUTER=1`)
 - Typecheck: `pnpm typecheck`
 - Everything: `pnpm verify` (typecheck, tests, n8n drift check)
 - Credentials: `pnpm doctor`
@@ -41,8 +45,8 @@ Global standards load from `~/.claude/CLAUDE.md`.
 
 - `raw/` — 12 committed artifacts. Stage 0, deliberately messy.
 - `src/openrouter/` — protocol (model tiers, both traps), schemas, chat client, embeddings.
-- `src/pipeline/` — text, extract, resume (paste-a-resume intake), validate, link, match, score,
-  rationale, index (orchestrator).
+- `src/pipeline/` — text, extract, resume (paste-a-resume intake), validate, link, match, judge
+  (weighing, §v3.8), score, rationale, index (orchestrator).
 - `src/store/` — types (the seven tables), seed, local adapter, Airtable adapter, mode detection.
 - `src/server/handlers.ts` — the `/api` surface, mounted by a Vite plugin in `vite.config.ts`. Holds
   `POW_APP_TOKEN` and proxies to the n8n webhooks; the browser never sees the secret.

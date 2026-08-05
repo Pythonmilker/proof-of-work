@@ -450,9 +450,20 @@ export function FitReport({
         <button className="btn ghost" onClick={again}>
           Score another posting
         </button>
+        {/*
+          "verdicts: pure code" stays literally true after weighing landed: resolve() is arithmetic and
+          a model has never been able to set a status. What weighing adds is one more INPUT to that
+          arithmetic, and the demotion count is printed beside it so the claim is checkable rather than
+          asserted — a weighing pass that demoted nothing looks identical to one that never ran, and a
+          reader deserves to be able to tell those apart.
+        */}
         <span className="mono" style={{ color: 'var(--text-faint)' }}>
-          scoring: pure code · rationales: {report.rationaleVia} · retrieval: {report.retrieval} ·
-          JD parsing: {report.parseVia}
+          verdicts: pure code · weighing:{' '}
+          {report.weighing === 'model'
+            ? `model, ${report.demotedCount} of ${report.weighedCount} lowered`
+            : 'none'}{' '}
+          · rationales: {report.rationaleVia} · retrieval: {report.retrieval} · JD parsing:{' '}
+          {report.parseVia}
         </span>
       </div>
     </>

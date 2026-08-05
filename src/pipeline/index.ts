@@ -30,10 +30,11 @@ import {
 import { extract } from './extract';
 import { parseRole } from './jd';
 import { embedTextFor, match, topCandidates, vectorKey } from './match';
+import { prune, weighCandidates } from './judge';
 import { findDuplicate, linkCapabilities, linkTechnologies, mergeProject } from './link';
 import { templateRationale, writeRationale, type RationaleContext } from './rationale';
 import { parseResume } from './resume';
-import { coverage, gaps, resolve, type Coverage, type Gap, type Resolution } from './score';
+import { coverage, gaps, resolve, worseOf, type Coverage, type Gap, type Resolution } from './score';
 import { containsTerm, normalize } from './text';
 import { slugify, toProject, toReviewStub, validateExtraction } from './validate';
 
@@ -473,6 +474,17 @@ export interface MatchReport {
   retrieval: 'lexical' | 'hybrid';
   parseVia: 'model' | 'deterministic';
   rationaleVia: 'model' | 'template' | 'mixed';
+  /**
+   * Whether a model weighed how much the matched rows actually prove. (DESIGN.md §v3.8)
+   *
+   * `unweighed` is the deterministic answer and is a real, stated degradation rather than a quiet one —
+   * it is what the keyless build runs, and what a failed weighing call falls back to. `weighedCount`
+   * and `demotedCount` are shown together because the second number is the one that says the pass did
+   * anything: a weighing model that demoted nothing is a weighing model worth asking about.
+   */
+  weighing: 'model' | 'unweighed';
+  weighedCount: number;
+  demotedCount: number;
   notes: string[];
 }
 
@@ -574,6 +586,8 @@ export async function matchRole(
   const results: RequirementResult[] = [];
   let modelSentences = 0;
   let templateSentences = 0;
+  let weighed = 0;
+  let demoted = 0;
 
   for (const requirement of parsed.role.requirements) {
     const found = match({
@@ -583,7 +597,39 @@ export async function matchRole(
       ...(hybrid ? { requirementVector: vectors.requirements.get(requirement.id) as Vector } : {}),
     });
     const cited = topCandidates(found);
-    const resolution = resolve({ requirement, candidates: cited, best: found.best }, snapshot);
+
+    /**
+     * Resolved twice on purpose. (DESIGN.md §v3.8)
+     *
+     * `deterministic` is this pipeline's answer with no model consulted — the same answer it gave
+     * before weighing existed, which is why the keyless build and the pinned regression anchor are
+     * untouched by any of this. The weighing pass then gets to argue the answer DOWN and nothing else:
+     * `worseOf` keeps the lower of the two, so no reply from a model can lift a requirement past what
+     * the record and the arithmetic already supported.
+     */
+    const deterministic = resolve({ requirement, candidates: cited, best: found.best }, snapshot);
+
+    const judgment = modelReachable(opts)
+      ? await weighCandidates({ requirement, candidates: cited, snapshot, now: matchedAt }, opts)
+      : { judgments: new Map(), strength: 0, source: 'unweighed' as const };
+
+    let resolution = deterministic;
+    if (judgment.source === 'model') {
+      weighed += 1;
+      resolution = worseOf(
+        deterministic,
+        resolve(
+          {
+            requirement,
+            candidates: prune(cited, judgment.judgments),
+            best: found.best,
+            strength: judgment.strength,
+          },
+          snapshot,
+        ),
+      );
+      if (resolution !== deterministic) demoted += 1;
+    }
     resolutions.set(requirement.id, resolution);
 
     const context: RationaleContext = {
@@ -642,6 +688,15 @@ export async function matchRole(
 
   await store.saveRole(role);
 
+  // Stated, never inferred from a blank space. A run that could reach a model and still weighed nothing
+  // is the case worth naming: the report is then a name-match report wearing a weighed report's header.
+  if (modelReachable(opts) && weighed === 0) {
+    notes.push(
+      'The weighing model was unavailable, so requirements were judged on how well they matched rather ' +
+        'than on how much the matched work proves.',
+    );
+  }
+
   return {
     role,
     coverage: cover,
@@ -650,6 +705,9 @@ export async function matchRole(
     parseVia: parsed.via,
     rationaleVia:
       modelSentences > 0 && templateSentences > 0 ? 'mixed' : modelSentences > 0 ? 'model' : 'template',
+    weighing: weighed > 0 ? 'model' : 'unweighed',
+    weighedCount: weighed,
+    demotedCount: demoted,
     notes,
   };
 }

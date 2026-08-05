@@ -177,6 +177,54 @@ export const RESUME_PARSE_SCHEMA = {
 } as const;
 
 /**
+ * What the weighing model returns, one entry per row retrieval already found. (DESIGN.md §v3.8)
+ *
+ * `id` is the tell that this call cannot invent anything: the model is echoing back identifiers it was
+ * handed, and judge.ts drops any id that was not in the list it sent. There is no field here for a new
+ * project, a new technology, or a new claim, so the worst a compromised reply can do is misjudge rows
+ * that already exist.
+ *
+ * `receipt` is the fabrication guard, and it is the reason strength is not just a number. A model may
+ * say a row is strong; to be believed past the proven line it has to name which receipt makes it strong,
+ * and that name is checked against the row's own evidence labels in code.
+ */
+export const JUDGMENT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['judgments'],
+  properties: {
+    judgments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'relevance', 'strength', 'receipt', 'reason'],
+        properties: {
+          id: { type: 'string', description: 'Copy an id from the list exactly. Never invent one.' },
+          relevance: {
+            type: 'number',
+            description: '0 to 1. Does this row speak to THIS requirement at all? 0 means a coincidence of wording.',
+          },
+          strength: {
+            type: 'number',
+            description:
+              '0 to 1. How strongly does the work behind this row demonstrate the requirement, judged on ' +
+              'technical difficulty, how much was actually built, how recent it is, and what it proves.',
+          },
+          receipt: {
+            type: 'string',
+            description:
+              'The exact label of the one receipt that justifies a strength above 0.7, copied from the ' +
+              'evidence shown for this row. Empty string when the strength does not need one.',
+          },
+          reason: { type: 'string', description: 'One short clause. What the score is based on.' },
+        },
+      },
+    },
+  },
+} as const;
+
+/**
  * What the rationale model returns. One field, because one field is all it is trusted with.
  *
  * The score is already computed before this call is made. The model is being handed a decision and asked

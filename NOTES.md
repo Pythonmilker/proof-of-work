@@ -205,8 +205,36 @@ What remains:
 3. **The film.** 75 seconds, script rewritten for the recruiter seat in docs/DEMO-SCRIPT.md, every
    beat verified against the credential-free path (including the promotion beat's exact paste texts).
 
+## v3.8 WEIGHING (2026-08-05)
+
+Joel: "deterministic just sorts data, it cannot weigh it properly correct?" Correct, and the cause was
+a conflation: `match()` returned a word-overlap score and `resolve()` read it as a coverage score, so a
+lexical hit went straight to proven. `src/pipeline/judge.ts` now asks a model how much the retrieved
+rows actually prove, and four guards bound the answer — echoed ids, a receipts clamp, a named-receipt
+check, and `worseOf`, which resolves every requirement twice and keeps the lower status. Weighing can
+only ever lower a verdict. Full reasoning and the measured result: DESIGN.md §v3.8. 272 tests, 17
+files, `pnpm verify` green.
+
+**The anchor moved, and this is Joel's decision.** Deterministic is still exactly 75 / 10 / 4 / 2 / 16,
+so the keyless build and every pinned test are untouched. The weighed run is **72% — 9 proven, 5
+partial, 2 gaps**, one demotion, which accounts for the full 3.1-point delta on its own.
+
+The demoted row is **"Familiarity with Claude Code"**, and the model's stated reason was that the
+record shows Claude API use, not Claude Code specifically. It is right: there is no Claude Code row.
+The match was landing on `'claude code'` as an **alias of the Claude API technology row** — the
+`react` / `react-three-fiber` bug class again, an alias claiming more than its row supports. The line
+above in this file that reads "Claude Code lands proven" was recording an alias, not a receipt.
+
+Two honest resolutions, both Joel's to pick: accept 72, or add a real Claude Code capability with a
+real receipt (this repo, its CLAUDE.md and `.claude/skills/` are genuine artifacts of it) and let it
+earn proven. Adding a row to move a number is what the evidence gate exists to make pointless, so the
+receipt has to be real either way. **75 appears on the resume, in the cover letter, and in the live
+Airtable base, so nothing gets re-scored until that call is made.**
+
 ## Open
 
+0. **Decide the 75-vs-72 question above**, then reconcile whichever number wins across the resume,
+   both cover letters, the Airtable base and `tests/resume.test.ts`.
 1. **Screenshots 1, 2 and 3.** The base and n8n are both up now, so this is framing rather than setup.
    `docs/SHOTLIST.md` has the exact shots. Create the views first (`airtable/VIEWS.md`) or shot 2 has
    nothing to show.

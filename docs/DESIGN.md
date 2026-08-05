@@ -1052,3 +1052,75 @@ The achievable form, stated precisely:
    link is safe to put on a resume.
 5. **Distribution posture:** recruiters receive surfaces (the shared view, a hosted app URL), never
    the repository. The repo has no remote by deliberate choice.
+
+## v3.8 Weighing (2026-08-05)
+
+Joel's objection, verbatim: "deterministic just sorts data, it cannot weigh it properly correct?
+correctly weighed data takes technical complexity, time spent on project, how recent it was, what
+skills it showed. this needs a model with reasoning ability."
+
+He is right, and the fault was a conflation. `match()` produced a number meaning "how well did the
+words line up", and `resolve()` read that number as though it meant "how well is this covered". A
+lexical hit scores 1.0, so any posting naming a technology the record also names went straight to
+proven. A tutorial and a shipped estate are the same string to `containsTerm`.
+
+### What was added
+
+`src/pipeline/judge.ts`. For each requirement the model sees the rows retrieval already returned —
+their names, statements, the projects they were built in with status, metrics and recency, and their
+receipts by label — and returns a relevance and a strength per row, plus the receipt it says justifies
+a strength above the proven line.
+
+### What bounds it
+
+Four things, none of which is the prompt:
+
+1. **Ids are echoed, never authored.** `applyJudgment` drops any id that was not in the list it sent,
+   so no reply can add a project, a technology or a receipt.
+2. **The receipts clamp.** A strength above `UNPROVEN_CEILING` survives only if the row is backed — a
+   capability that is not a stretch and has evidence, or a technology used in a reviewed project that
+   has evidence. Otherwise it is clamped in code, with the reason recorded.
+3. **The named-receipt guard.** A proven-level strength on a capability must name an evidence label
+   that is actually linked to that row. A label that does not match is clamped. Confidence is free;
+   a citable receipt is not.
+4. **`worseOf`.** `matchRole` resolves every requirement twice — once with no model consulted, once
+   with the model's numbers — and keeps the lower status. This is the guarantee, and it is one
+   comparison. It holds for a reply that rates every row 1.0, for a reply naming another candidate's
+   rows, and for a reply written by someone who wants a better score.
+
+The direction is deliberate and one-way: weighing can only lower a verdict. An instrument whose value
+is that it under-claims must not have a channel that raises the number, and the Gaps section exists
+because flattery is the failure mode this product is built against. Retrieval still decides whether
+anything matched at all, so a record that does not contain the thing stays a gap no matter what the
+model says about it.
+
+`tests/judge.test.ts` attacks each of the four with the reply a dishonest model would send. `worseOf`
+is pinned directly over all nine status pairs, because replacing its body with `return weighed` was
+measured to fail exactly one integration test — the clamps independently blocked the rest, which is
+defence in depth working and a thin test at the same time.
+
+### What it did on first contact
+
+`pnpm tsx scripts/weigh-probe.ts`, bundled posting, seeded record:
+
+```
+deterministic   75%  10 proven · 4 partial · 2 gaps
+weighed         72%   9 proven · 5 partial · 2 gaps   (16 weighed, 1 lowered)
+```
+
+One requirement moved, and it accounts for the whole delta: one proven-to-partial across sixteen
+equal-weight required items is 3.1 points.
+
+The row it moved was **"Familiarity with Claude Code (Anthropic's agentic coding tool)"**, and the
+model's reason was `Uses Claude API in shipped projects but does not demonstrate Claude Code
+specifically.` That is correct. There is no Claude Code row in the record. The requirement was
+matching `'claude code'`, an **alias on the Claude API technology row** — the same class of error as
+`react` matching `react-three-fiber`, which this repo has fixed once already. Calling the model
+programmatically and driving the agentic CLI are different skills, and the alias was quietly trading
+one for the other.
+
+So the first thing weighing did on a real posting was catch an over-claim in Joel's own record, of a
+kind the arithmetic could not see, in a row NOTES.md had recorded as a win. That is the feature
+working. Whether the answer is to accept 72 or to add a real Claude Code row with a real receipt is
+Joel's call, and the receipt would have to be genuine — adding rows to move a number is the exact
+behaviour the evidence gate exists to make pointless.

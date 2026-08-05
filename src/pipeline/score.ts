@@ -37,6 +37,16 @@ export interface ResolvedMatch {
   requirement: Requirement;
   candidates: Candidate[];
   best: number;
+  /**
+   * The weighed strength from ../pipeline/judge.ts, when a model ran. (DESIGN.md §v3.8)
+   *
+   * Absent on the deterministic path, and absent is not zero — a requirement nobody weighed is decided
+   * exactly as it was before weighing existed. Present, it is an ADDITIONAL condition on `proven` and
+   * nothing else: it cannot create a gap, and it cannot lift one. Retrieval still decides whether
+   * anything matched at all, which is why no reply from a model can conjure coverage out of a record
+   * that does not contain it.
+   */
+  strength?: number;
 }
 
 export interface Resolution {
@@ -138,15 +148,19 @@ export function resolve(input: ResolvedMatch, snapshot: Snapshot): Resolution {
   const noEvidence = evidence.length === 0;
   const allStretch = decisive.length > 0 && decisive.some((c) => c.tier === 'stretch');
   const capsUnevidenced = decisive.length > 0 && decisive.some((c) => c.evidence.length === 0);
+  // One more condition on proven, never a route to it. See `strength` on ResolvedMatch.
+  const weighedThin = input.strength !== undefined && input.strength < THRESHOLD_PROVEN;
 
-  if (belowProven || noEvidence || allStretch || capsUnevidenced) {
+  if (belowProven || noEvidence || allStretch || capsUnevidenced || weighedThin) {
     const reason = belowProven
       ? 'matched, but not closely enough to call it a direct hit'
       : noEvidence
         ? 'matched, but nothing verifiable is linked to it'
         : allStretch
           ? 'the matching capability is recorded as a stretch, not as shipped work'
-          : 'the matching capability has no evidence linked, so it reads as unverified';
+          : capsUnevidenced
+            ? 'the matching capability has no evidence linked, so it reads as unverified'
+            : 'the name matches, but the work behind it is thinner than the requirement asks for';
     return {
       status: 'partial',
       matchedTechnologies,
@@ -165,6 +179,27 @@ export function resolve(input: ResolvedMatch, snapshot: Snapshot): Resolution {
     evidence,
     shortfall: null,
   };
+}
+
+/** proven beats partial beats gap. The only ordering the pipeline needs, in one place. */
+const RANK: Record<CoverageStatus, number> = { proven: 2, partial: 1, gap: 0 };
+
+/**
+ * The guarantee, in one function.
+ *
+ * `matchRole` resolves every requirement twice — once with no model involved at all, once with the
+ * weighing model's numbers — and keeps whichever came out worse. Everything ../pipeline/judge.ts claims
+ * about what a model cannot do to this report reduces to this comparison. It holds for a reply that
+ * rates every row 1.0, for a reply that names ids from another candidate's record, and for a reply
+ * written by someone who wants a better score, because none of those can produce a status that beats an
+ * answer the model was never consulted about.
+ *
+ * The tie goes to the deterministic side deliberately: equal statuses keep the shortfall wording the
+ * arithmetic wrote, so a reader is never shown a model's explanation for a decision the model did not
+ * make.
+ */
+export function worseOf(deterministic: Resolution, weighed: Resolution): Resolution {
+  return RANK[weighed.status] < RANK[deterministic.status] ? weighed : deterministic;
 }
 
 export interface Coverage {

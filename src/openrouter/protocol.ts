@@ -6,10 +6,16 @@
  * money. The tiers below are ordered by how much judgement the job actually needs:
  *
  *   extraction  hard      long messy input, nested schema, numbers that must survive intact
+ *   weighing    hard      judgement about difficulty, recency and what work actually proves
  *   jd-parsing  medium    short clean input, flat schema
  *   rationale   easy      one sentence, from records already handed to it
- *   matching    none      embeddings + cosine, no chat model at all (see embeddings.ts)
+ *   retrieval   none      embeddings + cosine, no chat model at all (see embeddings.ts)
  *   scoring     none      arithmetic (see ../pipeline/score.ts)
+ *
+ * Weighing sits at the hard tier for the same reason extraction does. Deciding that a three-week
+ * Terraform estate demonstrates more than a tutorial that names Terraform is the one judgement in this
+ * pipeline that a small model gets confidently wrong, and it is judgement the arithmetic genuinely
+ * cannot make. What the arithmetic still does is bound the answer: see ../pipeline/judge.ts.
  *
  * Extraction deliberately does NOT drop to an 8B. Everything this project claims rests on the numbers
  * being real, and a small model that drops a field or rounds 536 to 500 destroys exactly the thing the
@@ -156,7 +162,7 @@ export const MODEL_REGISTRY: Record<string, ModelFacts> = {
 /** Slugs the chain builder must refuse. See the registry entry above for why this one is here. */
 export const KNOWN_UNSUITABLE = ['qwen/qwen3-8b'] as const;
 
-export type TaskTier = 'extraction' | 'jd-parsing' | 'rationale';
+export type TaskTier = 'extraction' | 'weighing' | 'jd-parsing' | 'rationale';
 
 /**
  * OpenRouter rejects a `models` array longer than this with HTTP 400:
@@ -173,6 +179,7 @@ export const MAX_CHAIN_MODELS = 3;
 /** Primary first, then cross-vendor fallbacks, then the floating router. */
 const TIER_CHAINS: Record<TaskTier, readonly string[]> = {
   extraction: ['anthropic/claude-haiku-4.5', 'openai/gpt-4o-mini', 'openrouter/auto'],
+  weighing: ['anthropic/claude-haiku-4.5', 'google/gemini-2.5-flash', 'openrouter/auto'],
   'jd-parsing': ['openai/gpt-4o-mini', 'google/gemini-2.5-flash', 'openrouter/auto'],
   rationale: ['meta-llama/llama-3.1-8b-instruct', 'openai/gpt-4o-mini', 'openrouter/auto'],
 };
