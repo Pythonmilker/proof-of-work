@@ -70,6 +70,10 @@ Global standards load from `~/.claude/CLAUDE.md`.
   matches `react-three-fiber` and the report cites a Unity game as React experience. See
   `containsTerm` in `src/pipeline/text.ts`.
 - **Airtable link fields need a second pass.** `linkedTableId` does not exist until the base is created.
+- **Deploy is `pnpm build`, with no prefix.** `VITE_MODEL_PROXY_BASE` lives in the committed
+  `.env.production` (it is an address, never a key). It used to be passed inline at build time and
+  lived nowhere, so a plain `pnpm build` on 2026-08-05 silently shipped the keyless lane: the header
+  went from `live models` to `no key` and nothing failed. Check the banner after every deploy.
 
 ## Acceptance criteria
 
