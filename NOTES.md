@@ -212,7 +212,7 @@ a conflation: `match()` returned a word-overlap score and `resolve()` read it as
 lexical hit went straight to proven. `src/pipeline/judge.ts` now asks a model how much the retrieved
 rows actually prove, and four guards bound the answer — echoed ids, a receipts clamp, a named-receipt
 check, and `worseOf`, which resolves every requirement twice and keeps the lower status. Weighing can
-only ever lower a verdict. Full reasoning and the measured result: DESIGN.md §v3.8. 272 tests, 17
+only ever lower a verdict. Full reasoning and the measured result: DESIGN.md §v3.8. 273 tests, 17
 files, `pnpm verify` green.
 
 **The anchor moved, and this is Joel's decision.** Deterministic is still exactly 75 / 10 / 4 / 2 / 16,

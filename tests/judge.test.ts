@@ -189,6 +189,27 @@ describe('applyJudgment — what a model is allowed to say', () => {
     expect(judged.get('cap')?.strength).toBe(1);
   });
 
+  it('refuses the reply a live model actually sent through the deployed proxy', () => {
+    /**
+     * Not invented. Observed 2026-08-05, first call to the weighing schema through the public relay,
+     * claude-haiku-4.5, on a record whose receipts line read "receipts: none linked":
+     *
+     *   {"id":"tf","relevance":1.0,"strength":1.0,"receipt":"none linked","reason":"Direct match ..."}
+     *
+     * It read the words "none linked" and handed them back as the receipt label. A prompt telling a
+     * model to cite a real receipt is a request; the check is what makes it a requirement.
+     */
+    const snapshot = snapshotWith({ technologies: [technology('tf', [])] });
+    const judged = applyJudgment(
+      { judgments: [{ id: 'tf', relevance: 1, strength: 1, receipt: 'none linked', reason: 'Direct match' }] },
+      cited('technology', 'tf'),
+      snapshot,
+    );
+
+    expect(judged.get('tf')?.strength).toBe(UNPROVEN_CEILING);
+    expect(judged.get('tf')?.strength).toBeLessThan(THRESHOLD_PROVEN);
+  });
+
   it('survives replies that are not the shape the schema promised', () => {
     const hostile: unknown[] = [
       null,
