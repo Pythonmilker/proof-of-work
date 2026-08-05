@@ -1121,6 +1121,21 @@ one for the other.
 
 So the first thing weighing did on a real posting was catch an over-claim in Joel's own record, of a
 kind the arithmetic could not see, in a row NOTES.md had recorded as a win. That is the feature
-working. Whether the answer is to accept 72 or to add a real Claude Code row with a real receipt is
-Joel's call, and the receipt would have to be genuine — adding rows to move a number is the exact
-behaviour the evidence gate exists to make pointless.
+working.
+
+### Resolved the same day
+
+The alias was removed — `claude-api` no longer answers to `'claude code'` — and `cap-claude-code`
+was added as a real row with a real receipt (`ev-pow-claude-code`, the repo's operating contract,
+checkable on a screen share rather than from a URL and labelled as such). Its `matchTerms` exclude
+`claude api` on purpose.
+
+Re-measured: **deterministic 75%, weighed 75%, zero demotions, verdicts identical.** The model rated
+the new row 0.9 and named `"Claude Code operating contract"` to justify it, which is what the
+named-receipt guard requires; it scored `claude-api` 0.1 for this requirement and `cap-multi-agent` 0,
+the latter agreeing with the portfolio ledger's standing warning not to describe Tendril as running
+Claude Code.
+
+The anchor is unmoved and now rests on a receipt rather than an alias. Worth stating plainly: the
+receipt had to exist first. Adding a row to move a number is the exact behaviour the evidence gate
+exists to make pointless, and if the receipt had been weak the honest answer would have been 72.

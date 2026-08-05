@@ -215,26 +215,38 @@ check, and `worseOf`, which resolves every requirement twice and keeps the lower
 only ever lower a verdict. Full reasoning and the measured result: DESIGN.md §v3.8. 273 tests, 17
 files, `pnpm verify` green.
 
-**The anchor moved, and this is Joel's decision.** Deterministic is still exactly 75 / 10 / 4 / 2 / 16,
-so the keyless build and every pinned test are untouched. The weighed run is **72% — 9 proven, 5
-partial, 2 gaps**, one demotion, which accounts for the full 3.1-point delta on its own.
+### The over-claim it caught, and how it was resolved
 
-The demoted row is **"Familiarity with Claude Code"**, and the model's stated reason was that the
-record shows Claude API use, not Claude Code specifically. It is right: there is no Claude Code row.
-The match was landing on `'claude code'` as an **alias of the Claude API technology row** — the
-`react` / `react-three-fiber` bug class again, an alias claiming more than its row supports. The line
-above in this file that reads "Claude Code lands proven" was recording an alias, not a receipt.
+On its first run against the real posting the pass demoted **"Familiarity with Claude Code"** to
+partial, taking the report to 72%. Its reason: `Uses Claude API in shipped projects but does not
+demonstrate Claude Code specifically.` That was correct. There was no Claude Code row in the record —
+the requirement was matching `'claude code'` as an **alias on the Claude API technology row**, the
+`react` / `react-three-fiber` bug class again. The line further up this file celebrating "Claude Code
+lands proven" had been recording an alias, not a receipt.
 
-Two honest resolutions, both Joel's to pick: accept 72, or add a real Claude Code capability with a
-real receipt (this repo, its CLAUDE.md and `.claude/skills/` are genuine artifacts of it) and let it
-earn proven. Adding a row to move a number is what the evidence gate exists to make pointless, so the
-receipt has to be real either way. **75 appears on the resume, in the cover letter, and in the live
-Airtable base, so nothing gets re-scored until that call is made.**
+Resolved 2026-08-05 (Joel's call, both parts):
+
+- **The alias is gone.** `claude-api` no longer answers to `'claude code'`. Calling the model
+  programmatically is not driving the agentic CLI.
+- **`cap-claude-code` is a real row** with a real receipt, `ev-pow-claude-code` — the repo's operating
+  contract, checkable on a screen share rather than from a URL, which is stated as the limit it is.
+  Its `matchTerms` deliberately exclude `claude api`; folding one into the other is the exact
+  over-claim that created this.
+
+Re-measured after the change: **deterministic 75%, weighed 75%, zero demotions, verdicts identical.**
+The model rated the new row 0.9 and named `"Claude Code operating contract"` to justify it, which is
+what the named-receipt guard requires. It also correctly scored `claude-api` at 0.1 for this
+requirement and `cap-multi-agent` at 0 — the latter matching the ledger's own standing warning not to
+describe Tendril as running Claude Code.
+
+So the anchor is unmoved at **75 / 10 / 4 / 2 / 16**, and it is now carried by a receipt instead of an
+alias. Nothing downstream needs reconciling.
 
 ## Open
 
-0. **Decide the 75-vs-72 question above**, then reconcile whichever number wins across the resume,
-   both cover letters, the Airtable base and `tests/resume.test.ts`.
+0. **Push the seed to the live Airtable base.** `pnpm airtable:push` is idempotent and the score is
+   unchanged, so this only adds the `cap-claude-code` and `ev-pow-claude-code` rows. Held back because
+   it writes to the base the resume links to.
 1. **Screenshots 1, 2 and 3.** The base and n8n are both up now, so this is framing rather than setup.
    `docs/SHOTLIST.md` has the exact shots. Create the views first (`airtable/VIEWS.md`) or shot 2 has
    nothing to show.

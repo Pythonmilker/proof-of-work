@@ -86,7 +86,11 @@ const technologies: Technology[] = [
   { id: 'sqlite-vec', name: 'sqlite-vec', aliases: ['sqlite-vec', 'vector index', 'vector database', 'vector store'], category: 'data', projects: [] },
 
   // ai
-  { id: 'claude-api', name: 'Claude API', aliases: ['claude', 'anthropic', 'claude api', 'anthropic api', 'claude agent sdk', 'claude code'], category: 'ai', projects: [] },
+  // 'claude code' was an alias here until 2026-08-05 and should never have been. Calling the model
+  // programmatically is not driving the agentic CLI, and the alias silently traded one for the other —
+  // the same shape as `react` matching `react-three-fiber`. The weighing pass caught it on its first
+  // real run. Claude Code now has its own capability row with its own receipt: cap-claude-code.
+  { id: 'claude-api', name: 'Claude API', aliases: ['claude', 'anthropic', 'claude api', 'anthropic api', 'claude agent sdk'], category: 'ai', projects: [] },
   { id: 'openai-api', name: 'OpenAI API', aliases: ['openai', 'gpt', 'gpt-4', 'openai api', 'chatgpt'], category: 'ai', projects: [] },
   { id: 'gemini', name: 'Google Gemini', aliases: ['gemini', 'google gemini', 'vertex'], category: 'ai', projects: [] },
   { id: 'openrouter', name: 'OpenRouter', aliases: ['openrouter'], category: 'ai', projects: [] },
@@ -156,6 +160,11 @@ const evidence: Evidence[] = [
   // an empty one. The posting still asks for Zapier; the record does not have it, and now says so.
   { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '6 tables and a no-login shared fit-report view, provisioned from a single PAT via the Meta API', url: 'https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
   { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and checked for drift in CI', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  // Added 2026-08-05, after the weighing pass demoted the Claude Code requirement and was right to:
+  // the record had no Claude Code row at all and was matching an ALIAS on Claude API. Repo-internal
+  // like ev-pow-n8n above, so it is checkable on a screen share rather than from a URL — which is the
+  // honest limit of this one and the reason its value states counts a reader can verify on sight.
+  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', value: 'CLAUDE.md pins 6 non-negotiables, each named to the test file that enforces it; .claude/ carries launch and settings config; 34 commits', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -372,6 +381,21 @@ const capabilities: Capability[] = [
 
   // ── Stretch. Capped at partial credit no matter how well a requirement matches. ──────────────────
   {
+    id: 'cap-claude-code',
+    name: 'Claude Code as the build tool',
+    statement:
+      'Drives Claude Code as the primary build environment: a repo-level operating contract in CLAUDE.md whose rules each name the test that enforces them, scoped skills, and committed launch and settings config.',
+    tier: 'proven',
+    candidate: DEFAULT_CANDIDATE_ID,
+    // Narrow on purpose. 'claude api' is NOT here and must not be: calling the model programmatically
+    // and driving the agentic CLI are different skills, and folding one into the other is precisely
+    // the over-claim that put this row here. The reverse alias on the claude-api technology row was
+    // removed in the same change.
+    matchTerms: ['claude code', 'agentic coding', 'agentic coding tool', 'ai coding assistant', 'ai-assisted development', 'coding agent'],
+    projects: ['proof-of-work'],
+    evidence: ['ev-pow-claude-code'],
+  },
+  {
     id: 'cap-airtable-backend',
     name: 'Airtable as an application backend',
     statement: 'Uses an Airtable base as the system of record for an application, provisioned through the Meta API and read and written by automation.',
@@ -554,8 +578,8 @@ const projects: Project[] = [
       'This system. Ingests messy evidence into a receipt-backed capability record and scores it against a pasted job description. Airtable is the backend, two n8n workflows carry the pipeline, and one Zap sends the notification.',
     metrics: {},
     technologies: ['react', 'typescript', 'vite', 'airtable', 'n8n', 'openrouter', 'claude-api', 'vitest', 'nodejs', 'rest-api'],
-    capabilities: ['cap-airtable-backend', 'cap-n8n-automation', 'cap-structured-output', 'cap-llm-integration', 'cap-rag', 'cap-frontend', 'cap-documentation'],
-    evidence: ['ev-pow-airtable', 'ev-pow-n8n'],
+    capabilities: ['cap-airtable-backend', 'cap-n8n-automation', 'cap-structured-output', 'cap-llm-integration', 'cap-rag', 'cap-frontend', 'cap-documentation', 'cap-claude-code'],
+    evidence: ['ev-pow-airtable', 'ev-pow-n8n', 'ev-pow-claude-code'],
     candidate: DEFAULT_CANDIDATE_ID,
     reviewStatus: 'ok',
     reviewReason: null,
