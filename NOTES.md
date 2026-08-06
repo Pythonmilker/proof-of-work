@@ -240,13 +240,37 @@ requirement and `cap-multi-agent` at 0 — the latter matching the ledger's own 
 describe Tendril as running Claude Code.
 
 So the anchor is unmoved at **75 / 10 / 4 / 2 / 16**, and it is now carried by a receipt instead of an
-alias. Nothing downstream needs reconciling.
+alias.
+
+### Three more faults, found by reading the live base rather than trusting the fix
+
+Fixing the seed did not fix the base: Results rows are written once, at scoring time, so the base kept
+displaying the old sentence. Re-scoring surfaced three real bugs the offline suite could not have.
+
+1. **`worseOf` was discarding the model's relevance judgment.** It returned the deterministic object on
+   a tie, and ties are nearly every requirement — so the pruned citation list was thrown away and the
+   Claude Code row still cited Tendril through `cap-multi-agent`, which the weighing model had scored
+   relevance **0**. The rationale writer then produced a sentence about Microsoft Store certification.
+   A tie now goes to the weighed object: equal statuses mean no verdict moved, so citations only narrow.
+2. **The adjective ban was a prompt with nothing behind it.** A live run wrote *"The candidate has
+   extensive experience with Claude Code"* — "extensive" is the prompt's own first banned example, and
+   the guard only ever checked numbers. `gradesTheCandidate()` enforces it now, with hyphen boundaries,
+   because a bare `\bdeep\b` fires inside "deep-link".
+3. **`demotedCount` compared object identity**, so after (1) the UI read "16 of 16 lowered" on a run
+   that lowered nothing.
+
+Also: `ev-pow-claude-code` ended with a dangling "34 commits" and a rationale read it as "34 commits to
+`.claude/`". The fabrication guard passed it because 34 **is** in the corpus — it catches invented
+numbers, not misattributed ones — so the fix is wording the model cannot misread.
+
+**Live base reconciled 2026-08-05.** One Roles row `role-arootah-2026-08-06` at 75%, 16 Results,
+10/4/2, zero rationales grading the candidate, zero Tendril citations under Claude Code. The
+superseded `role-arootah-2026-07-29` and its 16 Results were deleted after the replacement was read
+and checked. The base is the seven-table v3 shape and has been for some time — the migration item
+below was stale.
 
 ## Open
 
-0. **Push the seed to the live Airtable base.** `pnpm airtable:push` is idempotent and the score is
-   unchanged, so this only adds the `cap-claude-code` and `ev-pow-claude-code` rows. Held back because
-   it writes to the base the resume links to.
 1. **Screenshots 1, 2 and 3.** The base and n8n are both up now, so this is framing rather than setup.
    `docs/SHOTLIST.md` has the exact shots. Create the views first (`airtable/VIEWS.md`) or shot 2 has
    nothing to show.

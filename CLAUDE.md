@@ -34,7 +34,7 @@ Global standards load from `~/.claude/CLAUDE.md`.
 - React 19 + TypeScript + Vite. Hand-written CSS, no framework. Two runtime dependencies.
 - Install: `pnpm install`
 - Run: `pnpm dev` (port 5273)
-- Test: `pnpm test` (273 passing across 17 files, 3 skipped behind `LIVE_OPENROUTER=1`)
+- Test: `pnpm test` (278 passing across 17 files, 3 skipped behind `LIVE_OPENROUTER=1`)
 - Typecheck: `pnpm typecheck`
 - Everything: `pnpm verify` (typecheck, tests, n8n drift check)
 - Credentials: `pnpm doctor`
