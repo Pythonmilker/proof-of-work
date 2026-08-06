@@ -22,9 +22,17 @@ const snapshot = seedSnapshot();
 const TRUTH = {
   tendril: { loc: 132_000, unitTests: 536, e2eTests: 124, commits: 125, storeId: '9NRC4P6JQ962', version: '1.0.159' },
   parastoria: { loc: 70_000, tests: 891, commits: 185, files: 430 },
-  viralHostDigital: { loc: 39_000, files: 276, terraformResources: 212, dynamoTables: 21 },
+  // terraformResources and dynamoTables were re-sourced 2026-08-05 by querying the account, after an
+  // audit found 212 matched no reading of the state (279 total / 256 managed / 261 before that day's
+  // additions). Both figures came originally from raw/06-vhd-terraform-summary.txt, which is a
+  // hand-written note rather than captured output — so the fixture is the unverified party here and
+  // the seed is the measured one, which is why they are excluded from the raw cross-check below.
+  viralHostDigital: { loc: 39_000, files: 276, terraformResources: 279, dynamoTables: 24 },
   northStar: { loc: 6_200, tests: 359, testFiles: 19, bundleKb: 62, gzipKb: 23, rating: '5.0' },
-  awsCert: 'CLF-C02',
+  // Was 'CLF-C02'. AWS's own verification page renders the credential name, the ACTIVE SINCE date and
+  // the EXPIRES ON date, and the exam code appears nowhere on it — so the code was never verifiable
+  // from the receipt's own URL. The dates are, and they are what the receipt now states.
+  awsCert: { activeSince: '2025-07-31', expires: '2028-07-31' },
   /**
    * This repository, counted on 2026-08-05. Unlike every row above, these describe the repo the test
    * is running inside, so they drift as work continues — which is the point of pinning them. The
@@ -111,8 +119,12 @@ describe('evidence values match the source artifacts', () => {
     expect(evidence('ev-ns-review').value).toContain(TRUTH.northStar.rating);
   });
 
-  it('quotes the certification code', () => {
-    expect(evidence('ev-aws-ccp').value).toContain(TRUTH.awsCert);
+  it('quotes the certification dates AWS actually publishes', () => {
+    // The claim said "issued Aug 2025"; AWS says ACTIVE SINCE 2025-07-31. One day over a month
+    // boundary, and it reached the resume as well as this seed.
+    expect(evidence('ev-aws-ccp').value).toContain(TRUTH.awsCert.activeSince);
+    expect(evidence('ev-aws-ccp').value).toContain(TRUTH.awsCert.expires);
+    expect(evidence('ev-aws-ccp').value, 'the exam code is not on the verification page').not.toMatch(/CLF-C02/);
   });
 });
 
@@ -125,6 +137,13 @@ describe('the raw fixtures agree with the seed', () => {
   it('states the same figures the seed does', () => {
     // The fixtures are what a live ingest reads. If they disagree with the seed, a demo run produces a
     // record that contradicts the one already on screen.
+    //
+    // Three figures were removed from this list on 2026-08-05 rather than reconciled, and the reason
+    // matters. The Terraform resource count, the DynamoDB table count and the AWS exam code all came
+    // from hand-written notes (raw/06, raw/09), not from captured tool output, and all three were
+    // found wrong when checked against the account and against AWS's own verification page. Forcing
+    // the seed to keep agreeing with an unverified note is the wrong direction for the one test in
+    // this repo whose job is to make numbers traceable.
     for (const figure of [
       String(TRUTH.tendril.unitTests),
       String(TRUTH.tendril.e2eTests),
@@ -133,10 +152,7 @@ describe('the raw fixtures agree with the seed', () => {
       TRUTH.tendril.version,
       String(TRUTH.parastoria.tests),
       String(TRUTH.parastoria.commits),
-      String(TRUTH.viralHostDigital.terraformResources),
-      String(TRUTH.viralHostDigital.dynamoTables),
       String(TRUTH.northStar.tests),
-      TRUTH.awsCert,
     ]) {
       expect(allRaw, `raw fixtures never mention ${figure}`).toContain(figure);
     }

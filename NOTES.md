@@ -269,6 +269,78 @@ superseded `role-arootah-2026-07-29` and its 16 Results were deleted after the r
 and checked. The base is the seven-table v3 shape and has been for some time — the migration item
 below was stale.
 
+## RECEIPT AUDIT (2026-08-05)
+
+All 24 receipts verified against primary sources by 18 agents - every CONFIRMED verdict was then
+handed to a second agent whose only job was to refute it. Result: **8 wrong, 5 imprecise, 2
+unverifiable, 9 survived.** The trigger was Joel asking what "34 commits" was supposed to convey.
+
+### Corrected, because they were wrong and do not drift
+
+- **ev-tendril-cert inverted its own source.** It said "10 rounds, R2 through R10 APPROVED". The
+  artifact is docs/ms-store-cert-lessons-learned.md, whose table is titled "Rejection history (what
+  actually happened)". R2-R10 are the rounds that FAILED, policy by policy; one round was approved
+  (R10 / build #147). A reader concluded nine rounds passed; the source says nine failed. Now reads
+  "10 submission rounds; 9 rejected on named Store policies, approved on R10 (build #147)" - a better
+  story anyway, and a true one.
+- **ev-vhd-dynamo asserted an enforcement mechanism that does not exist.** See the security section
+  below. Count and scoping claim both wrong; cap-multi-tenant and the Viral Host Digital project
+  summary carried the same claim and were corrected with it.
+- **ev-aws-ccp was a month out.** AWS's own page says ACTIVE SINCE 2025-07-31; the receipt said
+  "issued Aug 2025". CLF-C02 appears nowhere on that page, so the exam code was never verifiable from
+  the receipt's own URL. **This date is on the resume too.**
+- **ev-pow-airtable said 6 tables.** The base has 7 since the v3 migration, and this repo's first
+  non-negotiable is "Seven tables". Self-contradicting inside the repo.
+- **ev-pow-n8n claimed a CI that does not exist.** The drift check is real and passes; there is no
+  runner, no config, no remote, no hook. Now says "drift-checked by pnpm verify", which is what
+  happens.
+- **ev-tendril-commits named a branch that does not exist.** 125 is exact, but the label said
+  "Commits on main" and the trunk is master - anyone doing the receipt's own verification gets an
+  error. Parastoria had the same problem and no main either.
+- **ev-pow-claude-code overstated on its third pass.** "each one stating how it is enforced" is true
+  of 6 of 7.
+- **ev-parastoria-site was framed as a shipped product.** It is a pre-launch waitlist page. Label and
+  value now say so.
+- **ev-ns-review has no artifact anywhere.** A third party's action that only Upwork can settle. Kept,
+  because it is true, but demoted to "Client review (unlinked)" until a public profile URL makes it
+  checkable by a stranger. **Getting that link is the cheapest credibility win outstanding.**
+
+### Left alone, because they are drift and not error
+
+ev-tendril-unit (536, now 552) and ev-parastoria-tests (891/65, now 1139/81) are backed by captured
+artifacts in raw/ that say the same numbers, and every row already stamps verifiedOn: 2026-07-27.
+Rewriting the seed without re-capturing the fixture would break the chain this project exists to keep:
+the artifact in the repo would contradict the claim beside it. Both current figures understate Joel,
+so re-capturing is worth doing - it is a decision, not a discovery.
+
+The Terraform and DynamoDB counts were treated differently and the distinction is the point:
+raw/06-vhd-terraform-summary.txt is a hand-written note, not captured output, and 212 matched no
+reading of the state at any date (279 now, 261 before that day's additions). A note that was never a
+measurement does not get to outrank one.
+
+### What the audit says about the method
+
+TRUTH in tests/seed-integrity.test.ts was "independently transcribed from the portfolio ledger" - and
+the ledger is a secondary document that carried the same errors. Transcribing from it proved nothing,
+in the same way that file's own header warns that importing the seed to check the seed proves nothing.
+The infrastructure figures are now sourced from queries against the account.
+
+### Security finding, not a wording defect
+
+ev-vhd-dynamo claimed "21 DynamoDB tables scoped by Cognito custom:tenantId". Verified read-only
+against the live account, no cross-tenant access attempted:
+
+- a CognitoJWTAuthorizer exists (yz3dub) and is attached to **no route**; all four live /portal routes
+  are AuthorizationType: NONE
+- portal_lambda.js decodeClaims() base64-decodes the JWT payload with **no signature verification**
+- tenantId falls back to "default" or to a client-supplied clientId query parameter
+- of 24 tables, 8 carry a tenantId and 2 use it as the partition key; listContacts uses a Scan
+  FilterExpression, not a key query
+- crm-contacts holds two incompatible PK conventions at once (TENANT#default and <uuid>#contact_...)
+
+A focused read-only investigation and remediation plan is underway. Joel's call: investigate and plan
+first, no infrastructure changes without approval.
+
 ## Open
 
 1. **Screenshots 1, 2 and 3.** The base and n8n are both up now, so this is framing rather than setup.

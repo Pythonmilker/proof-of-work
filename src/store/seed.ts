@@ -123,23 +123,23 @@ const evidence: Evidence[] = [
   { id: 'ev-tendril-site', label: 'Product site', kind: 'live-url', value: 'tendrilapp.ai', url: 'https://tendrilapp.ai', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
   { id: 'ev-tendril-unit', label: 'Vitest unit cases', kind: 'test-count', value: '536 passing across 24 files', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
   { id: 'ev-tendril-e2e', label: 'Playwright end-to-end cases', kind: 'test-count', value: '124 passing', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
-  { id: 'ev-tendril-commits', label: 'Commits on main', kind: 'repo-metric', value: '125', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
-  { id: 'ev-tendril-cert', label: 'Store certification rounds passed', kind: 'artifact', value: '10 rounds, R2 through R10 approved', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
+  { id: 'ev-tendril-commits', label: 'Commits on master', kind: 'repo-metric', value: '125', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
+  { id: 'ev-tendril-cert', label: 'Store certification history', kind: 'artifact', value: '10 submission rounds; 9 rejected on named Store policies, approved on R10 (build #147)', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
   { id: 'ev-tendril-proxy', label: 'Cross-provider streaming translation proxy', kind: 'repo-metric', value: '2629 lines, documented SSE state machine', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['tendril'] },
 
   // Parastoria
-  { id: 'ev-parastoria-site', label: 'Product domain', kind: 'live-url', value: 'parastoria.app', url: 'https://parastoria.app', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
+  { id: 'ev-parastoria-site', label: 'Pre-launch site', kind: 'live-url', value: 'parastoria.app (waitlist page; the product is in development)', url: 'https://parastoria.app', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
   { id: 'ev-parastoria-tests', label: 'Test cases', kind: 'test-count', value: '891 across 65 files', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
-  { id: 'ev-parastoria-commits', label: 'Commits on main', kind: 'repo-metric', value: '185', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
+  { id: 'ev-parastoria-commits', label: 'Commits on the working branch', kind: 'repo-metric', value: '185', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
 
   // Viral Host Digital
   { id: 'ev-vhd-site', label: 'Live company platform', kind: 'live-url', value: 'viralhostdigital.com', url: 'https://viralhostdigital.com', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
-  { id: 'ev-vhd-terraform', label: 'Terraform-managed resources', kind: 'infra-metric', value: '212 resources, multi-region', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
-  { id: 'ev-vhd-dynamo', label: 'Multi-tenant CRM tables', kind: 'infra-metric', value: '21 DynamoDB tables scoped by Cognito custom:tenantId', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
+  { id: 'ev-vhd-terraform', label: 'Terraform-managed resources', kind: 'infra-metric', value: '279 resources, multi-region', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
+  { id: 'ev-vhd-dynamo', label: 'Multi-tenant CRM tables', kind: 'infra-metric', value: '24 DynamoDB tables, 22 Terraform-managed; 8 carry a tenantId, 2 of them as the partition key', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
   { id: 'ev-vhd-codebuild', label: 'CI/CD pipeline', kind: 'infra-metric', value: 'CodeBuild ViralHostSiteBuild: build to S3 to CloudFront invalidation', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
 
   // North Star
-  { id: 'ev-ns-review', label: 'Client review', kind: 'client-review', value: '5.0 stars, zero revisions requested', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
+  { id: 'ev-ns-review', label: 'Client review (unlinked)', kind: 'client-review', value: '5.0 stars, zero revisions requested - stated by the candidate, not yet linked to the public Upwork profile', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
   { id: 'ev-ns-tests', label: 'Passing tests', kind: 'test-count', value: '359 across 19 files', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
   { id: 'ev-ns-bundle', label: 'Shipped bundle size', kind: 'repo-metric', value: '62 kB, 23 kB gzipped', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
   { id: 'ev-ns-video', label: 'Demo recording', kind: 'video', value: '2 minutes 21 seconds, all four use cases plus a fallback', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['north-star-support-bot'] },
@@ -149,7 +149,7 @@ const evidence: Evidence[] = [
   { id: 'ev-sparkle', label: 'Client site', kind: 'live-url', value: 'mywindowssparkle.com', url: 'https://mywindowssparkle.com', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['client-and-early-web-work'] },
 
   // Certification
-  { id: 'ev-aws-ccp', label: 'AWS Certified Cloud Practitioner', kind: 'certification', value: 'CLF-C02, issued Aug 2025, valid through Jul 2028', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: [] },
+  { id: 'ev-aws-ccp', label: 'AWS Certified Cloud Practitioner', kind: 'certification', value: 'Active since 2025-07-31, expires 2028-07-31, verifiable by name on AWS CertMetrics', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: [] },
 
   // This project. The only receipts backing Airtable and n8n, which is the honest position, and the
   // Gaps section says so in as many words.
@@ -158,8 +158,8 @@ const evidence: Evidence[] = [
   // to tick "n8n and/or Zapier" in a posting. n8n does the same job better, so the Zap was decoration,
   // and a decorative row in a record whose entire argument is that its claims are backed is worse than
   // an empty one. The posting still asks for Zapier; the record does not have it, and now says so.
-  { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '6 tables and a no-login shared fit-report view, provisioned from a single PAT via the Meta API', url: 'https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
-  { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and checked for drift in CI', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '7 tables and a no-login shared fit-report view, provisioned from a single PAT via the Meta API', url: 'https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and drift-checked by pnpm verify', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
   // Added 2026-08-05, after the weighing pass demoted the Claude Code requirement and was right to:
   // the record had no Claude Code row at all and was matching an ALIAS on Claude API. Repo-internal
   // like ev-pow-n8n above, so it is checkable on a screen share rather than from a URL, which is the
@@ -185,7 +185,7 @@ const evidence: Evidence[] = [
   // becomes a garbled sentence in front of a reader, and the 6/5/1 breakdown was interesting to write
   // and worth nothing to a recruiter. "each one stating how it is enforced" is true of all seven —
   // six name a test file, the seventh names the mode banner — and has nothing left to garble.
-  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', value: 'CLAUDE.md pins 7 non-negotiables, each one stating how it is enforced; .claude/ carries committed launch and settings config', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', value: 'CLAUDE.md pins 7 non-negotiables, 6 of them naming the test file that enforces the rule; .claude/ carries committed launch and settings config', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -303,7 +303,7 @@ const capabilities: Capability[] = [
   {
     id: 'cap-multi-tenant',
     name: 'Multi-tenant data modelling',
-    statement: 'Designs tenant-scoped schemas: a 21-table DynamoDB CRM keyed on a Cognito claim, with audit logging.',
+    statement: 'Designs tenant-scoped schemas for a 24-table DynamoDB CRM: tenantId on the partition key for the highest-volume tables, secondary indexes elsewhere, with audit logging.',
     tier: 'proven',
     candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['multi-tenant', 'multitenancy', 'data modeling', 'data modelling', 'schema design', 'crm'],
@@ -513,7 +513,7 @@ const projects: Project[] = [
     ended: null,
     status: 'live',
     summary:
-      'Company platform running entirely serverless on AWS: marketing site, client portal, a 21-table multi-tenant CRM, and an outbound email engine, all defined in Terraform.',
+      'Company platform running entirely serverless on AWS: marketing site, client portal, a 24-table tenant-scoped CRM, and an outbound email engine, all defined in Terraform.',
     metrics: { loc: 39_000, files: 276 },
     technologies: ['astro', 'react', 'nodejs', 'python', 'aws-lambda', 'api-gateway', 'dynamodb', 's3', 'cloudfront', 'cognito', 'ses', 'eventbridge', 'waf', 'terraform', 'codebuild', 'stripe', 'gemini', 'websocket', 'rest-api'],
     capabilities: ['cap-serverless', 'cap-iac', 'cap-multi-tenant', 'cap-email-pipeline', 'cap-security-hardening', 'cap-billing', 'cap-llm-integration', 'cap-frontend', 'cap-realtime', 'cap-cicd', 'cap-client-delivery'],
