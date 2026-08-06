@@ -162,13 +162,30 @@ const evidence: Evidence[] = [
   { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and checked for drift in CI', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
   // Added 2026-08-05, after the weighing pass demoted the Claude Code requirement and was right to:
   // the record had no Claude Code row at all and was matching an ALIAS on Claude API. Repo-internal
-  // like ev-pow-n8n above, so it is checkable on a screen share rather than from a URL — which is the
-  // honest limit of this one and the reason its value states counts a reader can verify on sight.
-  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', // "34 commits" sat at the end of this string unattached and a live rationale duly read it as "34
-  // commits to .claude/", which is not what the number counts. The fabrication guard passed it
-  // because 34 IS in the corpus — that guard catches invented numbers, not misattributed ones, so
-  // the defence has to be wording the model cannot misread.
-  value: 'CLAUDE.md pins 6 non-negotiables, each named to the test file that enforces it; .claude/ carries launch and settings config; the repository has 34 commits', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  // like ev-pow-n8n above, so it is checkable on a screen share rather than from a URL, which is the
+  // honest limit of this one.
+  //
+  // It deliberately carries no counts, and that is a lesson rather than caution. The first version
+  // said "6 non-negotiables" and "34 commits"; both were wrong within the afternoon. The replacement
+  // said "278 tests" until the tests written to stop it drifting made it 282. A number describing
+  // THIS repository, stated inside THIS repository, invalidates itself on the next commit.
+  //
+  // Scale now lives on the project row's metrics alongside every other project's, which is where the
+  // fit report reads it and where buildJudgeInput already shows it to the weighing model. What stays
+  // here is the part that is Claude Code evidence and does not drift: the contract and the config.
+  // The rule count survives because tests/seed-integrity.test.ts counts CLAUDE.md for real.
+  //
+  // One number, because the rewrites that failed all failed the same way. "each one naming the test
+  // file that enforces it" was false twice over (only 6 of 7 name a test, across 5 distinct files),
+  // and every attempt to state that precisely was compressed wrong by the rationale model in turn:
+  // "7 non-negotiables through 7 test files", then "6 test files ... across 5 test files", then
+  // "cites 6 test files". Each version was more accurate and read worse.
+  //
+  // The lesson is not about wording. A receipt carrying more nuance than a small model can compress
+  // becomes a garbled sentence in front of a reader, and the 6/5/1 breakdown was interesting to write
+  // and worth nothing to a recruiter. "each one stating how it is enforced" is true of all seven —
+  // six name a test file, the seventh names the mode banner — and has nothing left to garble.
+  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', value: 'CLAUDE.md pins 7 non-negotiables, each one stating how it is enforced; .claude/ carries committed launch and settings config', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -580,7 +597,12 @@ const projects: Project[] = [
     status: 'shipped',
     summary:
       'This system. Ingests messy evidence into a receipt-backed capability record and scores it against a pasted job description. Airtable is the backend, two n8n workflows carry the pipeline, and one Zap sends the notification.',
-    metrics: {},
+    // Counted 2026-08-05 with `git ls-files '*.ts' '*.tsx' | xargs wc -l`, comments and blanks
+    // included, which is the same method the other rows use. Deliberately no `tests` and no
+    // `commits`: both describe this repository from inside it, so both go stale the moment anyone
+    // adds a test or makes a commit. tests/seed-integrity.test.ts re-counts loc and files on every
+    // run and fails outside a tolerance band.
+    metrics: { loc: 16_171, files: 58 },
     technologies: ['react', 'typescript', 'vite', 'airtable', 'n8n', 'openrouter', 'claude-api', 'vitest', 'nodejs', 'rest-api'],
     capabilities: ['cap-airtable-backend', 'cap-n8n-automation', 'cap-structured-output', 'cap-llm-integration', 'cap-rag', 'cap-frontend', 'cap-documentation', 'cap-claude-code'],
     evidence: ['ev-pow-airtable', 'ev-pow-n8n', 'ev-pow-claude-code'],

@@ -25,6 +25,20 @@ const TRUTH = {
   viralHostDigital: { loc: 39_000, files: 276, terraformResources: 212, dynamoTables: 21 },
   northStar: { loc: 6_200, tests: 359, testFiles: 19, bundleKb: 62, gzipKb: 23, rating: '5.0' },
   awsCert: 'CLF-C02',
+  /**
+   * This repository, counted on 2026-08-05. Unlike every row above, these describe the repo the test
+   * is running inside, so they drift as work continues — which is the point of pinning them. The
+   * first version of this receipt claimed "6 non-negotiables" and "34 commits"; by the end of the
+   * same afternoon it was 7 and 38, and both wrong numbers had already been pushed to the live base.
+   *
+   *   loc, files   git ls-files '*.ts' '*.tsx' | xargs wc -l
+   *   rules        the '- **' bullets under ## Non-negotiables in CLAUDE.md
+   *
+   * No test count and no commit count. Both describe this repository from inside it, so both go
+   * stale the moment anyone adds a test or makes a commit — the receipt said "278 tests" until the
+   * tests added to stop it drifting made it 282, which is the trap demonstrating itself.
+   */
+  proofOfWork: { loc: 16_171, files: 58, nonNegotiables: 7, rulesWithTests: 6, distinctTestFiles: 5 },
 } as const;
 
 function project(id: string) {
@@ -230,5 +244,105 @@ describe('referential integrity', () => {
       expect(cap?.projects, id).toEqual(['proof-of-work']);
       expect(cap?.evidence.length, id).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * The self-referential receipt.
+ *
+ * ev-pow-claude-code describes THIS repository, so any number in it goes stale as this repository is
+ * worked on. That is not hypothetical: it shipped saying "6 non-negotiables" and "34 commits", and by
+ * the end of that afternoon the real figures were 7 and 38, with both wrong numbers already pushed to
+ * the live Airtable base. The replacement then said "278 tests" until the tests written to stop it
+ * drifting made it 282 — the trap demonstrating itself.
+ *
+ * So the receipt carries no counts, scale moved to the project row where every other project keeps
+ * it, and the one number that survives is checked by counting CLAUDE.md rather than by trusting it.
+ */
+describe('the Claude Code receipt describes this repository accurately', () => {
+  const claudeCode = () => evidence('ev-pow-claude-code');
+
+  it('states what CLAUDE.md actually pins, including the rule with no test behind it', () => {
+    /**
+     * All three figures are counted, because the first version of this receipt said the rules name
+     * "each one" a test file and that was false twice over: one rule names none, and two share a
+     * file. A live rationale then reported "7 non-negotiables through 7 test files", inflating an
+     * overstatement it had been handed. Downstream repeats the receipt more confidently than the
+     * receipt states it, so the receipt is where this has to be exact.
+     */
+    const md = readFileSync('CLAUDE.md', 'utf8');
+    const section = md.slice(md.indexOf('## Non-negotiables'), md.indexOf('## Stack'));
+
+    const bullets = section.split(/\n(?=- \*\*)/).filter((b) => b.startsWith('- **'));
+    const withTest = bullets.filter((b) => /tests\/[a-z-]+\.test\.ts/.test(b));
+    const distinctFiles = new Set(section.match(/tests\/[a-z-]+\.test\.ts/g) ?? []);
+
+    expect(bullets.length, 'non-negotiables').toBe(TRUTH.proofOfWork.nonNegotiables);
+    expect(withTest.length, 'rules naming a test file').toBe(TRUTH.proofOfWork.rulesWithTests);
+    expect(distinctFiles.size, 'distinct test files named').toBe(TRUTH.proofOfWork.distinctTestFiles);
+
+    // The receipt states ONE of these three, deliberately. Every attempt to state the 6/5/1 breakdown
+    // precisely was compressed wrong by the rationale model in turn: "7 non-negotiables through 7 test
+    // files", then "6 test files ... across 5 test files", then "cites 6 test files". Each version was
+    // more accurate and read worse, because a receipt carrying more nuance than a small model can
+    // compress becomes a garbled sentence in front of a reader.
+    //
+    // The other two counts stay asserted above, where they make "each one stating how it is enforced"
+    // a checked claim rather than a pleasant one: six rules name a test file, the seventh names the
+    // mode banner, and six plus one accounts for all seven.
+    expect(claudeCode().value).toContain(`${TRUTH.proofOfWork.nonNegotiables} non-negotiables`);
+    expect(withTest.length + 1, 'every rule accounted for').toBe(TRUTH.proofOfWork.nonNegotiables);
+  });
+
+  it('carries no count that goes stale when this repository is worked on', () => {
+    /**
+     * The line this guard has to walk, learned by getting it wrong twice. "5 test files" is fine: it
+     * counts the files CLAUDE.md names, changes only when a rule changes, and is pinned three lines
+     * up. "282 tests" and "38 commits" are not: they change when anyone adds a test or commits.
+     *
+     * So the target is the volatile shape, not the words. Both earlier versions banned honest
+     * phrasing instead — first "the test file that enforces it", then "5 test files" — and a guard
+     * that fires on honest wording gets loosened until it guards nothing.
+     */
+    const value = claudeCode().value;
+    expect(value, 'a commit count goes stale on the next commit').not.toMatch(/\d[\d,]*\s*commits?\b/i);
+    expect(value, 'a suite-sized figure belongs on the project metrics row').not.toMatch(/\d[\d,]{2,}/);
+    expect(value, 'lines and files belong on the project metrics row').not.toMatch(
+      /\d[\d,]*\s*(lines|loc)\b/i,
+    );
+  });
+
+  it('keeps the scale on the project metrics row, like every other project', () => {
+    const p = project('proof-of-work');
+    expect(p.metrics.loc).toBe(TRUTH.proofOfWork.loc);
+    expect(p.metrics.files).toBe(TRUTH.proofOfWork.files);
+    expect(p.metrics.tests, 'a test count here goes stale on the next test').toBeUndefined();
+    expect(p.metrics.commits, 'a commit count here goes stale on the next commit').toBeUndefined();
+  });
+
+  it('counts the same TypeScript the metrics claim', () => {
+    // Walks the tree the way `git ls-files '*.ts' '*.tsx' | xargs wc -l` does, so the number on the
+    // project row has a command behind it rather than a memory. Banded rather than exact because this
+    // file is itself TypeScript and grows whenever a test is added; drift past the band means the
+    // figure needs re-counting, which is the reminder this assertion exists to deliver.
+    const roots = ['src', 'tests', 'scripts', 'airtable', 'n8n'];
+    let lines = 0;
+    let files = 0;
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (/\.tsx?$/.test(entry.name)) {
+          files += 1;
+          lines += readFileSync(path, 'utf8').split('\n').length;
+        }
+      }
+    };
+    for (const root of roots) walk(root);
+
+    expect(files, 'TypeScript file count').toBeGreaterThanOrEqual(TRUTH.proofOfWork.files - 2);
+    expect(files, 'TypeScript file count').toBeLessThan(TRUTH.proofOfWork.files + 6);
+    expect(lines, 'TypeScript line count').toBeGreaterThan(TRUTH.proofOfWork.loc * 0.95);
+    expect(lines, 'TypeScript line count').toBeLessThan(TRUTH.proofOfWork.loc * 1.15);
   });
 });
