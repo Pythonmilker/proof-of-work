@@ -628,7 +628,11 @@ export async function matchRole(
           snapshot,
         ),
       );
-      if (resolution !== deterministic) demoted += 1;
+      // Compare the STATUS, not the object. `worseOf` returns the weighed object on a tie for its
+      // narrower citations, so identity is true on almost every requirement and this read "16 of 16
+      // lowered" on a run that lowered nothing — a number in the UI that contradicted the verdicts
+      // printed beside it.
+      if (resolution.status !== deterministic.status) demoted += 1;
     }
     resolutions.set(requirement.id, resolution);
 

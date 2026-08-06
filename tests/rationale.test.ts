@@ -8,7 +8,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { buildContext, hasUnsourcedNumber, templateRationale, type RationaleContext } from '@/pipeline/rationale';
+import {
+  buildContext,
+  gradesTheCandidate,
+  hasUnsourcedNumber,
+  templateRationale,
+  type RationaleContext,
+} from '@/pipeline/rationale';
 import type { Evidence, Project } from '@/store/types';
 
 const project: Project = {
@@ -122,5 +128,38 @@ describe('templateRationale', () => {
       const sentence = templateRationale({ ...context, status });
       expect(hasUnsourcedNumber(sentence, buildContext({ ...context, status }))).toBe(false);
     }
+  });
+});
+
+describe('gradesTheCandidate', () => {
+  /**
+   * RATIONALE_SYSTEM has banned these words since it was written and nothing enforced it until
+   * 2026-08-05. The first case below is verbatim from a live run against the real posting.
+   */
+  it('rejects the sentence a live model actually wrote', () => {
+    expect(
+      gradesTheCandidate(
+        'The candidate has extensive experience with Claude Code, as evidenced by 34 commits.',
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects the three words the prompt names by example', () => {
+    for (const word of ['extensive', 'strong', 'deep']) {
+      expect(gradesTheCandidate(`Shows ${word} command of the tooling.`), word).toBe(true);
+    }
+  });
+
+  it('leaves a sentence that only cites the record alone', () => {
+    expect(
+      gradesTheCandidate('Terraform appears in Viral Host Digital, with 14 resources and 2 receipts.'),
+    ).toBe(false);
+  });
+
+  it('does not fire on the words appearing in a technical phrase', () => {
+    // The ban is on grading a person, not on the words existing. A rule that mangles honest
+    // sentences gets switched off, and then it protects nothing.
+    expect(gradesTheCandidate('Uses deep-link routing and eventual consistency.')).toBe(false);
+    expect(gradesTheCandidate('Strongly typed throughout.')).toBe(false);
   });
 });

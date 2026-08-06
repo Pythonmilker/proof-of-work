@@ -291,9 +291,18 @@ describe('worseOf — the guarantee itself', () => {
     }
   });
 
-  it('hands back the deterministic object on a tie, not the weighed one', () => {
+  it('hands back the weighed object on a tie, for its narrower citations', () => {
+    // Equal statuses mean weighing changed no verdict, so there is nothing to guard against and the
+    // weighed object is the one carrying the pruned citation list. Measured consequence of the old
+    // behaviour: the Claude Code requirement kept citing Tendril's store certification through a
+    // capability the model had scored relevance 0.
+    const w = status('partial');
+    expect(worseOf(status('partial'), w)).toBe(w);
+  });
+
+  it('still refuses a weighed status that is better', () => {
     const d = status('partial');
-    expect(worseOf(d, status('partial'))).toBe(d);
+    expect(worseOf(d, status('proven'))).toBe(d);
   });
 });
 
@@ -405,14 +414,35 @@ describe('the model cannot raise a verdict', () => {
     }
   });
 
-  it('keeps the arithmetic wording when both answers agree', () => {
-    // A reader must never be shown a model's explanation for a decision the model did not make.
-    const { deterministic, final } = bothWays(
-      cited('capability', 'cap'),
-      receiptlessSnapshot,
-      perfectReply('cap'),
-    );
-    expect(final.shortfall).toBe(deterministic.shortfall);
+  it('drops a coincidental row from the citations when the verdict is unchanged', () => {
+    // The other half of the pruning story. The stretch row holds the tie either way, so the status is
+    // identical and there is no promotion — but the row the model called coincidental must not survive
+    // into the citation list, because the rationale writer reads that list and writes about whatever
+    // is in it.
+    const snapshot = snapshotWith({
+      capabilities: [
+        capability('relevant', 'proven', ['ev1'], ['p1']),
+        capability('coincidental', 'proven', ['ev2'], ['p2']),
+      ],
+      projects: [project('p1', ['ev1']), project('p2', ['ev2'])],
+      evidence: [receipt('ev1', 'a receipt', ['p1']), receipt('ev2', 'unrelated receipt', ['p2'])],
+    });
+    const candidates: Candidate[] = [
+      { kind: 'capability', id: 'relevant', name: 'relevant', score: 1, via: 'lexical' },
+      { kind: 'capability', id: 'coincidental', name: 'coincidental', score: 1, via: 'lexical' },
+    ];
+
+    const { deterministic, final } = bothWays(candidates, snapshot, {
+      judgments: [
+        { id: 'relevant', relevance: 1, strength: 1, receipt: 'a receipt', reason: 'on point' },
+        { id: 'coincidental', relevance: 0, strength: 0, receipt: '', reason: 'shared word only' },
+      ],
+    });
+
+    expect(deterministic.matchedCapabilities).toContain('coincidental');
+    expect(final.status).toBe(deterministic.status);
+    expect(final.matchedCapabilities).toEqual(['relevant']);
+    expect(final.evidence).not.toContain('ev2');
   });
 });
 

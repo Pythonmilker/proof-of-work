@@ -164,7 +164,11 @@ const evidence: Evidence[] = [
   // the record had no Claude Code row at all and was matching an ALIAS on Claude API. Repo-internal
   // like ev-pow-n8n above, so it is checkable on a screen share rather than from a URL — which is the
   // honest limit of this one and the reason its value states counts a reader can verify on sight.
-  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', value: 'CLAUDE.md pins 6 non-negotiables, each named to the test file that enforces it; .claude/ carries launch and settings config; 34 commits', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', // "34 commits" sat at the end of this string unattached and a live rationale duly read it as "34
+  // commits to .claude/", which is not what the number counts. The fabrication guard passed it
+  // because 34 IS in the corpus — that guard catches invented numbers, not misattributed ones, so
+  // the defence has to be wording the model cannot misread.
+  value: 'CLAUDE.md pins 6 non-negotiables, each named to the test file that enforces it; .claude/ carries launch and settings config; the repository has 34 commits', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────

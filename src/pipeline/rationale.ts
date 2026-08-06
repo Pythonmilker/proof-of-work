@@ -89,6 +89,42 @@ export function hasUnsourcedNumber(sentence: string, corpus: string): boolean {
   return numbersIn(sentence).some((n) => !allowed.has(n) && Number(n.replace(/,/g, '')) > 12);
 }
 
+/**
+ * Reject a sentence that grades the candidate instead of citing the record.
+ *
+ * RATIONALE_SYSTEM has banned these words since it was written, and until 2026-08-05 nothing enforced
+ * it — the guard checked numbers only. A live run produced "The candidate has extensive experience
+ * with Claude Code", which is the flattery this whole product argues against, written by the one
+ * component whose output a reader takes at face value. A rule stated only in a prompt is a preference.
+ *
+ * Matched on word boundaries, with hyphens treated as part of the word — the same rule `containsTerm`
+ * in text.ts had to learn, for the same reason. A bare `\bdeep\b` fires inside "deep-link", and a
+ * guard that mangles honest sentences gets switched off, after which it protects nothing. The ban is
+ * on grading a person, not on the words existing.
+ */
+const BANNED_ADJECTIVES = [
+  'extensive',
+  'strong',
+  'deep',
+  'expert',
+  'expertise',
+  'seasoned',
+  'proficient',
+  'excellent',
+  'impressive',
+  'exceptional',
+  'outstanding',
+  'robust',
+  'solid',
+  'vast',
+  'significant',
+];
+
+export function gradesTheCandidate(sentence: string): boolean {
+  const lower = sentence.toLowerCase();
+  return BANNED_ADJECTIVES.some((word) => new RegExp(`(?<![\\w-])${word}(?![\\w-])`).test(lower));
+}
+
 /** Join a list the way a person would: "a", "a and b", "a, b and c". */
 function readable(items: readonly string[]): string {
   if (items.length === 0) return '';
@@ -147,7 +183,7 @@ export async function writeRationale(
 
   const raw = result.value.rationale;
   const text = typeof raw === 'string' ? raw.trim() : '';
-  if (!text || text.length > 400 || hasUnsourcedNumber(text, corpus)) {
+  if (!text || text.length > 400 || hasUnsourcedNumber(text, corpus) || gradesTheCandidate(text)) {
     return { text: templateRationale(ctx), source: 'template' };
   }
 

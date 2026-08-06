@@ -194,12 +194,16 @@ const RANK: Record<CoverageStatus, number> = { proven: 2, partial: 1, gap: 0 };
  * written by someone who wants a better score, because none of those can produce a status that beats an
  * answer the model was never consulted about.
  *
- * The tie goes to the deterministic side deliberately: equal statuses keep the shortfall wording the
- * arithmetic wrote, so a reader is never shown a model's explanation for a decision the model did not
- * make.
+ * A TIE goes to the weighed side, and that is not a softening of the rule. Equal statuses mean the
+ * weighing pass changed no verdict, so there is no promotion to guard against — and the weighed
+ * resolution is the one carrying pruned citations, with the rows the model called coincidental
+ * dropped. Handing back the deterministic object on a tie threw that away, which was measured to
+ * matter: the Claude Code requirement kept citing Tendril's Microsoft Store certification through a
+ * capability the model had scored relevance 0, and the rationale writer duly wrote a sentence about
+ * store certification rounds. Citations only ever narrow here; the status is already decided above.
  */
 export function worseOf(deterministic: Resolution, weighed: Resolution): Resolution {
-  return RANK[weighed.status] < RANK[deterministic.status] ? weighed : deterministic;
+  return RANK[weighed.status] <= RANK[deterministic.status] ? weighed : deterministic;
 }
 
 export interface Coverage {
