@@ -129,8 +129,8 @@ const evidence: Evidence[] = [
 
   // Parastoria
   { id: 'ev-parastoria-site', label: 'Pre-launch site', kind: 'live-url', value: 'parastoria.app (waitlist page; the product is in development)', url: 'https://parastoria.app', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
-  { id: 'ev-parastoria-tests', label: 'Test cases', kind: 'test-count', value: '891 across 65 files', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
-  { id: 'ev-parastoria-commits', label: 'Commits on the working branch', kind: 'repo-metric', value: '185', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
+  { id: 'ev-parastoria-tests', label: 'Test cases', kind: 'test-count', value: '1154 across 81 files, all passing', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
+  { id: 'ev-parastoria-commits', label: 'Commits on the working branch', kind: 'repo-metric', value: '250', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['parastoria'] },
 
   // Viral Host Digital
   { id: 'ev-vhd-site', label: 'Live company platform', kind: 'live-url', value: 'viralhostdigital.com', url: 'https://viralhostdigital.com', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['viral-host-digital'] },
@@ -494,7 +494,7 @@ const projects: Project[] = [
     status: 'in-development',
     summary:
       'Cross-platform tabletop-RPG world and campaign platform: deterministic procedural world generation, offline-first sync, a companion second screen, and a paid membership tier on an AWS SAM backend.',
-    metrics: { loc: 70_000, tests: 891, commits: 185, files: 430 },
+    metrics: { loc: 70_000, tests: 1154, commits: 250, files: 430 },
     technologies: ['electron', 'react', 'typescript', 'pixijs', 'capacitor', 'sqlite', 'astro', 'aws-sam', 'aws-lambda', 'dynamodb', 'cognito', 's3', 'ses', 'stripe', 'websocket', 'vercel-ai-sdk', 'rest-api'],
     capabilities: ['cap-frontend', 'cap-serverless', 'cap-iac', 'cap-billing', 'cap-e2e-testing', 'cap-realtime', 'cap-llm-integration'],
     evidence: ['ev-parastoria-site', 'ev-parastoria-tests', 'ev-parastoria-commits'],

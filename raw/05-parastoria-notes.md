@@ -25,8 +25,11 @@ backend bits that are actually deployed:
 
 size right now:
   ~70k LOC, roughly 430 files
-  65 test files / about 891 test cases
-  185 commits
+  re-counted 2026-08-05 by running every workspace suite (9 of them), tree clean:
+  81 test files / 1154 test cases, all passing
+  250 commits on feat/store-readiness-and-atlas-pass
+  (the old "65 files / about 891" in this note was an estimate and was close to
+   packages/core on its own, not the monorepo)
 
 things I'm actually proud of
   * deterministic procedural worldgen — priority-flood watershed regions, locked down by

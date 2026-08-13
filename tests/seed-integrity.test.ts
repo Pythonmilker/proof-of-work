@@ -21,7 +21,11 @@ const snapshot = seedSnapshot();
 /** Independently transcribed from the portfolio ledger. Do not derive these from the seed. */
 const TRUTH = {
   tendril: { loc: 132_000, unitTests: 536, e2eTests: 124, commits: 125, storeId: '9NRC4P6JQ962', version: '1.0.159' },
-  parastoria: { loc: 70_000, tests: 891, commits: 185, files: 430 },
+  // tests and commits re-measured 2026-08-05 by running all nine workspace suites and
+  // `git rev-list --count HEAD`, on a clean tree, and raw/05 was re-written to match. The old
+  // "65 files / about 891" was Joel's own estimate and sat close to packages/core alone (900/55),
+  // not the monorepo. loc and files are still his estimate and are not independently checked here.
+  parastoria: { loc: 70_000, tests: 1154, commits: 250, files: 430 },
   // terraformResources and dynamoTables were re-sourced 2026-08-05 by querying the account, after an
   // audit found 212 matched no reading of the state (279 total / 256 managed / 261 before that day's
   // additions). Both figures came originally from raw/06-vhd-terraform-summary.txt, which is a
