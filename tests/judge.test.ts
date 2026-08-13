@@ -573,3 +573,44 @@ describe('what the model is shown', () => {
     expect(text).not.toMatch(/other/);
   });
 });
+
+describe('the receipt boundary matches the instruction the model was given', () => {
+  /**
+   * REGRESSION. The prompt tells the model a receipt is required only ABOVE 0.7, and to "score it 0.7 or
+   * below and leave 'receipt' empty" otherwise. The clamp fired at `> UNPROVEN_CEILING` (0.69), so a reply
+   * that followed those instructions exactly — 0.7 with an empty receipt — was clamped to 0.69, and
+   * `weighedThin` (< THRESHOLD_PROVEN) then demoted a deterministically proven requirement to partial.
+   * A fencepost, not a judgment, quietly eroding the score for obeying the prompt.
+   */
+  const atTheBoundary = (strength: number) => ({
+    judgments: [{ id: 'cap', relevance: 1, strength, receipt: '', reason: 'modest but real' }],
+  });
+
+  it('leaves an as-instructed 0.7 with no receipt alone', () => {
+    const judged = applyJudgment(atTheBoundary(THRESHOLD_PROVEN), cited('capability', 'cap'), backedSnapshot);
+    const row = judged.get('cap');
+    expect(row?.strength).toBe(THRESHOLD_PROVEN);
+    expect(row?.clamped).toBeNull();
+  });
+
+  it('still clamps a receiptless claim that reaches ABOVE the boundary', () => {
+    const judged = applyJudgment(atTheBoundary(0.95), cited('capability', 'cap'), backedSnapshot);
+    const row = judged.get('cap');
+    expect(row?.strength).toBe(UNPROVEN_CEILING);
+    expect(row?.clamped).toMatch(/no receipt was named/i);
+  });
+
+  it('a boundary strength does not demote a requirement the deterministic pass proved', () => {
+    // The end-to-end consequence: obeying the prompt must not cost the requirement its verdict.
+    const deterministic = resolve({ requirement, candidates: cited('capability', 'cap'), best: 1 }, backedSnapshot);
+    expect(deterministic.status).toBe('proven');
+
+    const judged = applyJudgment(atTheBoundary(THRESHOLD_PROVEN), cited('capability', 'cap'), backedSnapshot);
+    const weighed = resolve(
+      { requirement, candidates: prune(cited('capability', 'cap'), judged), best: 1, strength: strengthOf(judged) },
+      backedSnapshot,
+    );
+
+    expect(worseOf(deterministic, weighed).status).toBe('proven');
+  });
+});

@@ -350,3 +350,43 @@ describe('the regression anchor', () => {
     expect(report.parseVia).toBe('deterministic');
   });
 });
+
+describe('a marked bullet is an item, never a section heading', () => {
+  /**
+   * REGRESSION. `readBulletedList` tested the heading regexes before stripping the bullet marker, so a
+   * short bulleted requirement whose text happened to contain a heading word was swallowed as a heading
+   * and never collected. Measured on the two most ordinary phrasings a posting uses.
+   */
+  it('collects a bulleted "Must have ..." instead of eating it as a heading', () => {
+    const role = parseRoleDeterministically(
+      ['Engineer', '', 'Requirements', '- Must have experience with React', '- Comfortable with SQL'].join('\n'),
+    );
+    const texts = role.requirements.map((r) => r.text);
+    expect(texts).toContain('Must have experience with React');
+    expect(texts).toContain('Comfortable with SQL');
+  });
+
+  it('a bulleted "Bonus: ..." is an item and does not flip the section for the bullets after it', () => {
+    // The compounding half of the bug: the swallowed bullet also switched section state, so every
+    // following required bullet was recorded as preferred and silently half-weighted in coverage.
+    const role = parseRoleDeterministically(
+      ['Engineer', '', 'Requirements', '- Bonus: familiarity with Zapier', '- Ship a React front end'].join('\n'),
+    );
+    const shipIt = role.requirements.find((r) => r.text.includes('React front end'));
+    expect(shipIt?.kind).toBe('required');
+    expect(role.requirements.map((r) => r.text)).toContain('Bonus: familiarity with Zapier');
+  });
+
+  it('an UNMARKED heading line still opens its section', () => {
+    // The regexes keep their real job: only a line with no bullet marker can be a heading.
+    const role = parseRoleDeterministically(
+      ['Engineer', '', 'Requirements', '- Ship a React front end', 'Nice to have', '- Zapier'].join('\n'),
+    );
+    expect(role.requirements.find((r) => r.text === 'Zapier')?.kind).toBe('preferred');
+    expect(role.requirements.find((r) => r.text.includes('React'))?.kind).toBe('required');
+  });
+
+  it('leaves the pinned sample posting exactly where it was', () => {
+    expect(parseRoleDeterministically(SAMPLE_POSTING).requirements).toHaveLength(16);
+  });
+});

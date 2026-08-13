@@ -144,8 +144,17 @@ function readEvidence(blob: string): ExtractedProject['evidence'] {
   for (const [url] of blob.matchAll(URL_RE)) {
     const clean = url.replace(/[.,;]+$/, '');
     if (seen.has(clean)) continue;
+    // URL_RE matches token shapes the WHATWG parser rejects (`http://:3000`, `http://%`, `http://[abc`),
+    // so a bad URL in pasted text must skip the row, not throw. This runs on the keyless deterministic
+    // path, so an unhandled throw here takes down the whole ingest instead of parking a Needs-Review stub.
+    let host: string;
+    try {
+      host = new URL(clean).hostname.replace(/^www\./, '');
+    } catch {
+      continue;
+    }
     seen.add(clean);
-    out.push({ label: new URL(clean).hostname.replace(/^www\./, ''), value: clean, url: clean, kind: 'live-url' });
+    out.push({ label: host, value: clean, url: clean, kind: 'live-url' });
   }
 
   return out.slice(0, 12);

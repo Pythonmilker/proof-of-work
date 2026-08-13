@@ -16,6 +16,7 @@ import { embed, type Vector } from '../openrouter/embeddings';
 import { modelReachable, type LlmOptions } from '../openrouter/client';
 import {
   DEFAULT_CANDIDATE_ID,
+  UnknownCandidateError,
   type Candidate,
   type Capability,
   type Evidence,
@@ -82,6 +83,22 @@ function evidenceId(projectSlug: string, label: string, value: string): string {
   return `ev-${projectSlug}-${slugify(label)}-${slugify(value).slice(0, 24)}`.slice(0, 96);
 }
 
+/**
+ * Refuse an id the store does not have, the way both n8n workflows already do.
+ *
+ * Scoping filters an unknown id down to empty arrays, which reads downstream as a real applicant who
+ * happens to have no record: ingest writes rows stamped with an owner the roster can never show, and
+ * matchRole renders a fully-formed 0% report where every requirement says nothing matches. An answer
+ * that looks like an answer and is not one is the failure this pipeline is built to refuse, so a bad
+ * id fails here rather than being rendered.
+ */
+function assertCandidateExists(snapshot: Snapshot, candidateId: string): void {
+  if (candidateId === DEFAULT_CANDIDATE_ID) return; // always present: the seeded worked example
+  if (!snapshot.candidates.some((c) => c.id === candidateId)) {
+    throw new UnknownCandidateError(candidateId);
+  }
+}
+
 export async function ingest(
   blob: string,
   sourceName: string,
@@ -90,6 +107,7 @@ export async function ingest(
 ): Promise<IngestResult> {
   const full = await store.read();
   const candidateId = opts.candidateId ?? DEFAULT_CANDIDATE_ID;
+  assertCandidateExists(full, candidateId);
 
   // Scope before anything reads the snapshot, the same guarantee matchRole makes: dedup, capability
   // linking and extraction context only ever see this candidate's rows, so a supporting document can
@@ -548,6 +566,7 @@ export async function matchRole(
 ): Promise<MatchReport> {
   const full = await store.read();
   const candidateId = opts.candidateId ?? DEFAULT_CANDIDATE_ID;
+  assertCandidateExists(full, candidateId);
 
   /**
    * Scope before matching, not after. Projects, capabilities and evidence are owned per-candidate, so

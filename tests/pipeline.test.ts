@@ -191,3 +191,68 @@ describe('matchRole', () => {
     expect((await store.read()).roles).toHaveLength(1);
   });
 });
+
+describe('untrusted paste cannot crash the keyless path', () => {
+  /**
+   * REGRESSION. `readEvidence` called `new URL()` on every URL_RE match with no guard, and URL_RE
+   * matches token shapes the WHATWG parser rejects. Verified against Node: `http://:3000`, `http://%`
+   * and `http://[abc` all match the regex and all throw. This runs on the deterministic path, so the
+   * throw took down the whole ingest — including on the hosted keyless demo, where pasted text is the
+   * only input there is. A bad URL must cost its own row, not the record.
+   */
+  const MALFORMED = ['http://:3000', 'http://%', 'http://[abc'];
+
+  /** A real README shape with one malformed URL spliced in, so validation passes and only the URL is odd. */
+  const blobWith = (bad: string) =>
+    [
+      '# Ledger Service',
+      '',
+      'A billing service that reconciles invoices nightly and retries failed captures.',
+      'Built with TypeScript on AWS Lambda, with DynamoDB behind it.',
+      '',
+      `Runbook: ${bad}`,
+      'Docs: https://example.com/runbook',
+    ].join('\n');
+
+  it.each(MALFORMED)('survives %s in pasted text instead of throwing', async (bad) => {
+    // Before the guard this threw out of extractDeterministically and took the whole ingest with it.
+    const result = await ingest(blobWith(bad), 'pasted.md', store, keyless);
+    expect(result.stages.find((s) => s.stage === 'extract')?.state).toBe('ok');
+    expect(result.project?.name).toBe('Ledger Service');
+  });
+
+  it('drops only the malformed URL and keeps the good one', async () => {
+    await ingest(blobWith('http://[abc'), 'pasted.md', store, keyless);
+    const urls = (await store.read()).evidence.filter((e) => e.kind === 'live-url').map((e) => e.url);
+    expect(urls).toContain('https://example.com/runbook');
+    expect(urls.some((u) => u?.includes('[abc'))).toBe(false);
+  });
+});
+
+describe('an id the store does not have is refused, not answered', () => {
+  /**
+   * REGRESSION. Scoping an unknown candidateId yields empty arrays, which reads downstream as a real
+   * applicant with no record: matchRole rendered a complete 0% report where every requirement said
+   * nothing matched, and ingest wrote rows owned by someone the roster can never display. Both n8n
+   * workflows already fail loudly on this exact input; the app lanes now agree with them.
+   */
+  it('matchRole throws rather than rendering a 0% report for a typo', async () => {
+    await expect(
+      matchRole(SAMPLE_POSTING, store, { ...keyless, candidateId: 'candidate-jaen' }),
+    ).rejects.toThrow(/candidate-jaen/);
+  });
+
+  it('ingest throws rather than writing rows owned by nobody', async () => {
+    await expect(
+      ingest(raw('10-genestrata-unity.md'), 'g.md', store, { ...keyless, candidateId: 'candidate-nope' }),
+    ).rejects.toThrow(/candidate-nope/);
+    expect((await store.read()).projects.some((p) => p.candidate === 'candidate-nope')).toBe(false);
+  });
+
+  it('the seeded applicant still needs no introduction, and the anchor is untouched', async () => {
+    const report = await matchRole(SAMPLE_POSTING, store, keyless);
+    expect(report.role.requirements).toHaveLength(16);
+    expect(report.coverage.score).toBe(75);
+    expect(report.coverage.proven).toBe(10);
+  });
+});

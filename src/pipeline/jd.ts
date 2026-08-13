@@ -426,6 +426,16 @@ function readBulletedList(lines: readonly string[], requirements: Requirement[],
     const line = rawLine.trim();
     if (!line) continue;
 
+    // A marked bullet is an ITEM, tested before the heading regexes — never swallowed as a heading.
+    // "- Must have experience with React" is 33 chars and matches REQUIRED_HEADING, so the old
+    // heading-first order dropped it entirely (and a bullet like "- Bonus: ..." also flipped the
+    // section). Only an UNMARKED line can be a section heading, which is what these regexes are for.
+    const body = bulletBody(line);
+    if (body !== null) {
+      collect(body, section, requirements, seen);
+      continue;
+    }
+
     if (PREFERRED_HEADING.test(line) && line.length < 60) {
       section = 'preferred';
       continue;
@@ -434,10 +444,6 @@ function readBulletedList(lines: readonly string[], requirements: Requirement[],
       section = 'required';
       continue;
     }
-
-    const body = bulletBody(line);
-    if (body === null) continue;
-    collect(body, section, requirements, seen);
   }
 }
 

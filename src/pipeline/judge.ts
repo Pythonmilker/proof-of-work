@@ -245,7 +245,12 @@ export function applyJudgment(
     const reason = typeof row.reason === 'string' ? row.reason.trim().slice(0, 200) : '';
     let clamped: string | null = null;
 
-    if (strength > UNPROVEN_CEILING) {
+    // Gate on the proven threshold the prompt names, not UNPROVEN_CEILING. The model is told to
+    // "score it 0.7 or below and leave receipt empty" for unbacked strengths, so a receipt is only
+    // required ABOVE 0.7. Firing at > UNPROVEN_CEILING (0.69) clamped an as-instructed 0.7/empty-receipt
+    // row down to 0.69, which weighedThin (< 0.7) then demoted — eroding the score for following the
+    // instructions. The clamp TARGET stays UNPROVEN_CEILING so a genuine over-claim still lands thin.
+    if (strength > THRESHOLD_PROVEN) {
       if (!backed(candidate.kind, id, snapshot)) {
         strength = UNPROVEN_CEILING;
         clamped = 'held below a direct hit: nothing verifiable is linked to this row';
