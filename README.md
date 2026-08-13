@@ -199,7 +199,7 @@ when a caller supplies an override that is not already in the chain.
 ## Tests
 
 ```bash
-pnpm test        # 209 passing, 3 skipped, 13 files
+pnpm test        # 282 passing, 3 skipped, 17 files
 pnpm typecheck
 pnpm verify      # typecheck, tests, and the workflow drift check
 ```

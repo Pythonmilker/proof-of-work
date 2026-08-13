@@ -16,3 +16,5 @@ data/session.json
 .DS_Store
 Thumbs.db
 *.log
+
+.claude/
