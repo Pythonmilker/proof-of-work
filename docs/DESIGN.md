@@ -896,7 +896,7 @@ clients/proof-of-work/
 ├── zapier/                  ZAP.md · sample-payload.json
 ├── scripts/                 doctor.ts · seed.ts
 ├── tests/
-└── docs/                    DESIGN.md · WRITEUP.md · SHOTLIST.md · DEMO-SCRIPT.md · screenshots/
+└── docs/                    DESIGN.md · WRITEUP.md
 ```
 
 ---
@@ -1120,7 +1120,7 @@ programmatically and driving the agentic CLI are different skills, and the alias
 one for the other.
 
 So the first thing weighing did on a real posting was catch an over-claim in Joel's own record, of a
-kind the arithmetic could not see, in a row NOTES.md had recorded as a win. That is the feature
+kind the arithmetic could not see, in a row the working notes had recorded as a win. That is the feature
 working.
 
 ### Resolved the same day
