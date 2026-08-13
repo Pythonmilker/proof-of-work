@@ -52,7 +52,7 @@ The delivered product is the Airtable base; this repo is everything that fills i
   Intake, Records, ModeBanner, sample-posting.
 - `n8n/build.ts` — generates both workflows. Do not hand-edit the JSON.
 - `airtable/` — schema, provision, push, VIEWS.md, INTERFACE.md.
-- `docs/` — DESIGN.md, WRITEUP.md, SHOTLIST.md, DEMO-SCRIPT.md.
+- `docs/` — DESIGN.md (the end-to-end design), WRITEUP.md (the narrative).
 
 ## Gotchas
 
@@ -72,33 +72,6 @@ The delivered product is the Airtable base; this repo is everything that fills i
   `.env.production` (it is an address, never a key). It used to be passed inline at build time and
   lived nowhere, so a plain `pnpm build` on 2026-08-05 silently shipped the keyless lane: the header
   went from `live models` to `no key` and nothing failed. Check the banner after every deploy.
-
-## Acceptance criteria
-
-- [x] Runs end to end with no credentials
-- [x] Three ingest branches demonstrable: new record, dedup, validation failure to Needs Review
-- [x] Fit report with citations and a truthful Gaps section
-- [x] Both OpenRouter traps have regression tests asserting real request bodies
-- [x] Two n8n workflows committed, generated from source, drift-checked, and verified to import and
-      round-trip in a real self-hosted n8n
-- [x] Airtable base created and seeded against a real account from one token, idempotent
-- [x] Zap documented with a testable sample payload
-- [x] Resume intake: a pasted resume becomes a Candidate plus receiptless claims (`pnpm test`,
-      tests/resume.test.ts)
-- [x] Claim promotion: a supporting document's receipts attach to the claims they match, and only
-      claims that predate the document
-- [x] Candidate isolation: matching and scoring are scoped to one candidate's rows before anything
-      reads the snapshot, in the app and in both workflows
-- [x] Token-gated endpoints: the n8n webhooks and the server proxy require `POW_APP_TOKEN` and fail
-      closed when it is unset
-- [x] README through the `technical-writing` skill with its grep pass re-run
-- [x] Nine screenshots captured by `pnpm screenshots`; three more need Joel's live accounts (the
-      committed set predates the v3 tabs and wants a reshoot)
-- [x] One-click recruiter demo with zero dependencies: the static build hosted live at
-      proof.viralhostdigital.com (S3 + CloudFront + WAF, Terraform-managed, keyless in-browser
-      pipeline)
-- [ ] 60 to 90 second recording — OPTIONAL since the live demo URL shipped; its remaining value is
-      the LinkedIn Featured thumbnail and interview rehearsal (script: docs/DEMO-SCRIPT.md)
 
 # Compact instructions
 When compacting, keep: the non-negotiables above, the current task, the list of modified files, and any
