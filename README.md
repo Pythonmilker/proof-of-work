@@ -258,5 +258,4 @@ src/ui/          applicants, score, fit report, record browser
 n8n/          two workflows plus the generator that writes them
 airtable/     schema, provisioning, seeding, the view and Interface scripts
 zapier/       one Zap and a sample payload
-docs/DESIGN.md   the end-to-end design, including what was cut
 ```

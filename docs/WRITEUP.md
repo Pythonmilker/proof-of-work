@@ -104,8 +104,6 @@ and misses capabilities a posting only describes.
 The Zap polls on Zapier's schedule, up to 15 minutes on the free plan.
 
 Eleven screenshots are committed; the three that need live n8n and Airtable accounts are not.
-`docs/SHOTLIST.md` has the framing for each, and the committed set predates the v3 tab names, so the
-app shots want a reshoot.
 
 ## Numbers
 
