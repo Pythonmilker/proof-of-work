@@ -101,7 +101,7 @@ either, so `airtable/VIEWS.md` and `airtable/INTERFACE.md` are click-scripts rat
 Retrieval without a key is lexical plus token overlap. It matches technologies a posting names literally
 and misses capabilities a posting only describes.
 
-The Zap polls on Zapier's schedule, up to 15 minutes on the free plan.
+There is no notification step. Zapier was evaluated for one and cut; n8n carries the whole pipeline.
 
 Eleven screenshots are committed; the three that need live n8n and Airtable accounts are not.
 

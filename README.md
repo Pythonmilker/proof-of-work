@@ -225,8 +225,8 @@ call for cannot be created via the API either.
 Retrieval without a key is lexical plus token overlap. It matches technologies a posting names literally
 and misses capabilities a posting only describes. The header says `lexical` when this is what ran.
 
-The Zap polls on Zapier's schedule, up to 15 minutes on the free plan. A webhook trigger would be
-immediate and needs a paid plan.
+There is no notification step. Zapier was evaluated for one and cut: n8n already has the trigger, the
+branching and the code nodes, so a second automation tool would have been a logo rather than a feature.
 
 The bundled posting in `src/ui/sample-posting.ts` keeps a real posting's requirement bullets word for
 word and nothing else. The company is Northwind Systems, which does not exist, and the "About" blurb is
@@ -257,5 +257,4 @@ src/store/       types, seed, local adapter, Airtable adapter, mode detection
 src/ui/          applicants, score, fit report, record browser
 n8n/          two workflows plus the generator that writes them
 airtable/     schema, provisioning, seeding, the view and Interface scripts
-zapier/       one Zap and a sample payload
 ```

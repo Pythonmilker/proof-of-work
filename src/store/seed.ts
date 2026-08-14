@@ -596,7 +596,7 @@ const projects: Project[] = [
     ended: '2026-07',
     status: 'shipped',
     summary:
-      'This system. Ingests messy evidence into a receipt-backed capability record and scores it against a pasted job description. Airtable is the backend, two n8n workflows carry the pipeline, and one Zap sends the notification.',
+      'This system. Ingests messy evidence into a receipt-backed capability record and scores it against a pasted job description. Airtable is the database, two n8n workflows are the backend, and every verdict is computed in code before a model writes a word about it.',
     // Counted 2026-08-05 with `git ls-files '*.ts' '*.tsx' | xargs wc -l`, comments and blanks
     // included, which is the same method the other rows use. Deliberately no `tests` and no
     // `commits`: both describe this repository from inside it, so both go stale the moment anyone

@@ -286,7 +286,6 @@ STAGE 4   MATCH WORKFLOW
              ├─ 7  write                    Role row with the whole report
              └─ 8  respond                  { role, coverage, results, gaps }
              │
-             ├────────────────────────────► STAGE 5  Zapier: new Role row → Slack
              ▼
 STAGE 6   THE FINISH
              a) Airtable Interface: role header, coverage gauge, requirement table, expandable evidence
@@ -339,7 +338,8 @@ work.
 | `category` | single select | language · framework · cloud · data · automation · ai · payments · tooling |
 | `projects` | link → Projects | Airtable maintains the reverse side; the local store does it in code |
 
-~30 rows. Includes Airtable, n8n and Zapier — linked only to this project, which is the point.
+~30 rows. Includes Airtable and n8n, linked only to this project, which is the point. Zapier is
+deliberately not among them: see section 12.
 
 ### 4.3 Capabilities
 
@@ -834,24 +834,21 @@ swapping in Postgres is one file, which is the correct place for that seam to si
 
 ---
 
-## 12. Zapier
+## 12. Zapier, and why there is none
 
-One Zap, roughly thirty minutes, and it exists to satisfy a stated requirement rather than to carry
-architecture:
+Cut before v2, and the reasoning is worth keeping because it is the same reasoning that would apply to
+adding any second automation tool.
 
-**New record in Airtable `Roles` → Filter (`score` is set) → Slack message.**
+The plan was one Zap: new row in Airtable `Roles`, filter on `score` being set, post to Slack. Roughly
+thirty minutes of work, and it existed to satisfy a stated requirement rather than to carry anything.
 
-```
-New fit report — {{title}} at {{company}}
-Coverage {{score}}%  ·  {{proven}} proven, {{partial}} partial, {{gap}} gaps
-```
+n8n already holds the trigger, the branching and the code nodes, so the Zap would have been a logo on a
+slide. A demo that ships a tool it does not need is making a claim about breadth that the architecture
+then contradicts, and a reader who opens the workflow can see there was nothing for it to do.
 
-Documented in `zapier/ZAP.md` with the field mapping and a screenshot. `zapier/sample-payload.json`
-lets it be tested without waiting for a real run.
-
-The write-up says plainly that n8n carries the pipeline and Zapier carries the notification, and why:
-the pipeline needs branching, code nodes, and version control, and Zapier is not the tool for that. A
-demo that pretended otherwise would be less convincing, not more.
+So there is no notification step at all. `src/store/seed.ts` says so in the record: the Zapier row was
+removed from the technology list, and a posting asking for "n8n and/or Zapier" is answered by n8n on its
+own. A posting asking for Zapier specifically comes out a gap, which is correct.
 
 ---
 
@@ -893,7 +890,6 @@ clients/proof-of-work/
 │   └── ui/                  App · Intake · BeforeAfter · FitReport · Records · ModeBanner
 ├── n8n/                     extract-project.json · match-role.json · build.ts · README.md
 ├── airtable/                schema.ts · provision.ts · push.ts · INTERFACE.md
-├── zapier/                  ZAP.md · sample-payload.json
 ├── scripts/                 doctor.ts · seed.ts
 ├── tests/
 └── docs/                    DESIGN.md · WRITEUP.md
@@ -903,7 +899,7 @@ clients/proof-of-work/
 
 ## 15. Deliverables
 
-1. Working app — React intake + fit report, Airtable base, two n8n workflows, one Zap
+1. Working app — React intake + fit report, Airtable base, two n8n workflows
 2. Five screenshots — n8n canvas · Airtable Projects with a record expanded showing linked Technologies
    and Evidence · the Interface dashboard · raw blob vs structured record · the React fit report scored
    against the Arootah posting with Gaps visible
@@ -929,7 +925,6 @@ clients/proof-of-work/
 | 10 | React UI | next |
 | 11 | n8n workflows + build/check | next |
 | 12 | Airtable provision/push + Interface script | next |
-| 13 | Zap recipe | next |
 | 14 | Tests | alongside each of the above |
 | 15 | README, write-up, shot list, demo script | last |
 | 16 | Screenshots, video | needs live accounts (Joel) |
