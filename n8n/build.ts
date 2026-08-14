@@ -25,15 +25,59 @@
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { MAX_CHAIN_MODELS, modelChain } from '../src/openrouter/protocol';
-import { PROJECT_EXTRACTION_SCHEMA, ROLE_PARSE_SCHEMA, RATIONALE_SCHEMA } from '../src/openrouter/schemas';
+import {
+  JUDGMENT_SCHEMA,
+  PROJECT_EXTRACTION_SCHEMA,
+  ROLE_PARSE_SCHEMA,
+  RATIONALE_SCHEMA,
+} from '../src/openrouter/schemas';
 import { EXTRACTION_SYSTEM } from '../src/pipeline/extract';
 import { JD_SYSTEM } from '../src/pipeline/jd';
+import { WEIGHING_SYSTEM } from '../src/pipeline/judge';
+import { EMBEDDING_MODEL } from '../src/openrouter/embeddings';
+import { EMBEDDINGS_ENDPOINT } from '../src/openrouter/protocol';
 import { RATIONALE_SYSTEM } from '../src/pipeline/rationale';
 import { THRESHOLD_PARTIAL, THRESHOLD_PROVEN } from '../src/pipeline/score';
 import { DEFAULT_CANDIDATE_ID } from '../src/store/types';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * Shared rules
+ * ───────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The scoring rules, emitted from `src/pipeline/portable.ts` rather than restated here.
+ *
+ * This is the fix for a whole class of defect. The evidence gate was corrected in score.ts after an
+ * adversarial audit and the hand-typed copy in the Code node below was not, so the app and the workflow
+ * disagreed about which requirements were proven — while `--check` stayed green, because it compares the
+ * committed JSON to what THIS FILE regenerates. A hand-mirrored rule can drift from its original without
+ * any check in the repo noticing. A generated one cannot: change portable.ts and the next build carries
+ * it, and `tests/workflow-parity.test.ts` fails if a committed workflow was built from an older copy.
+ *
+ * `transpileModule` only erases the types — comments and formatting survive, so the reader of a Code node
+ * sees the same annotated source the app runs, not a minified blob. The `export` keywords come off
+ * because an n8n Code node is a plain script, not a module.
+ */
+function sharedRules(): string {
+  const source = readFileSync(join(HERE, '..', 'src', 'pipeline', 'portable.ts'), 'utf8');
+  const js = ts.transpileModule(source, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2020,
+      module: ts.ModuleKind.ESNext,
+      removeComments: false,
+      newLine: ts.NewLineKind.LineFeed,
+    },
+  }).outputText;
+
+  return js
+    .replace(/^export\s+/gm, '')
+    .replace(/\r\n/g, '\n')
+    .trim();
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
  * Node builders
@@ -49,6 +93,16 @@ interface N8nNode {
   position: Position;
   parameters: Record<string, unknown>;
   credentials?: Record<string, unknown>;
+  /** Run once regardless of how many items arrive. See `loadAll`. */
+  executeOnce?: boolean;
+  /** Present on webhook nodes; without it the production URL is never registered. */
+  webhookId?: string;
+  /** Node-level settings n8n reads as siblings of `parameters`: onError, retryOnFail, maxTries, … */
+  onError?: string;
+  retryOnFail?: boolean;
+  maxTries?: number;
+  waitBetweenTries?: number;
+  alwaysOutputData?: boolean;
 }
 
 /**
@@ -75,8 +129,19 @@ function node(
   position: Position,
   parameters: Record<string, unknown>,
   credentials?: Record<string, unknown>,
+  /** Node-level settings (onError, retryOnFail, …) — siblings of `parameters`, not members of it. */
+  settings?: Record<string, unknown>,
 ): N8nNode {
-  return { id: idFor(name), name, type, typeVersion, position, parameters, ...(credentials ? { credentials } : {}) };
+  return {
+    id: idFor(name),
+    name,
+    type,
+    typeVersion,
+    position,
+    parameters,
+    ...(credentials ? { credentials } : {}),
+    ...(settings ?? {}),
+  };
 }
 
 /**
@@ -89,13 +154,27 @@ function node(
  * Value verified against the installed Webhook node source, which offers exactly:
  * onReceived | lastNode | responseNode | streaming.
  */
-const webhook = (name: string, path: string, position: Position) =>
-  node(name, 'n8n-nodes-base.webhook', 2, position, {
+/**
+ * `webhookId` is not decoration: without it the production URL does not exist.
+ *
+ * n8n registers a webhook under `{workflowId}/{node name}/{path}` when the node carries no webhookId,
+ * and nothing serves that composite key — `POST /webhook/proof-of-work/match` answers 404 with "the
+ * requested webhook is not registered", which reads exactly like a workflow someone forgot to activate.
+ * Both workflows were activated. Import, round-trip and every structural test passed throughout, because
+ * none of them ask the running server for a URL.
+ *
+ * Derived from the node name by the same hash as `idFor`, so it is stable across rebuilds and the drift
+ * check still compares equal.
+ */
+const webhook = (name: string, path: string, position: Position) => ({
+  ...node(name, 'n8n-nodes-base.webhook', 2, position, {
     path,
     options: {},
     httpMethod: 'POST',
     responseMode: 'responseNode',
-  });
+  }),
+  webhookId: idFor(`webhook:${name}`),
+});
 
 /** Version 1.5, the newest the installed n8n-nodes-base offers ([1, 1.1, 1.2, 1.3, 1.4, 1.5]). */
 const respond = (name: string, position: Position, body: string, code = 200) =>
@@ -108,9 +187,21 @@ const respond = (name: string, position: Position, body: string, code = 200) =>
 const code = (name: string, position: Position, jsCode: string) =>
   node(name, 'n8n-nodes-base.code', 2, position, { jsCode });
 
-const http = (name: string, position: Position, jsonBody: string) =>
+/**
+ * `degrades` marks a call the pipeline is designed to survive without.
+ *
+ * Default is to abort, and that is the right default: if the posting parse or the extraction fails there
+ * is nothing to fall back to, and the app throws in the same place. The rationale call is the one
+ * exception — the app treats a failed sentence as a template sentence and carries on, so the workflow
+ * must too. It matters more since the fan-out: sixteen calls where there was one means sixteen chances
+ * to hit a 502, and without this a single one of them would abort a run that had already computed every
+ * verdict correctly and written nothing.
+ *
+ * `onError` values are from n8n's own node schema (packages/workflow/src/schemas.ts).
+ */
+const http = (name: string, position: Position, jsonBody: string, degrades = false, url = 'https://openrouter.ai/api/v1/chat/completions') =>
   node(name, 'n8n-nodes-base.httpRequest', 4.2, position, {
-    url: 'https://openrouter.ai/api/v1/chat/completions',
+    url,
     method: 'POST',
     sendBody: true,
     specifyBody: 'json',
@@ -120,7 +211,18 @@ const http = (name: string, position: Position, jsonBody: string) =>
       parameters: [{ name: 'Authorization', value: '=Bearer {{ $env.OPENROUTER_API_KEY }}' }],
     },
     options: { timeout: 45000 },
-  });
+  }, undefined, degrades
+    ? {
+        onError: 'continueRegularOutput',
+        // Bounded and safe to repeat: the request carries no state and writes nothing. Retrying a
+        // transient 502 costs a second; not retrying costs a template sentence for the rest of the run.
+        retryOnFail: true,
+        maxTries: 3,
+        waitBetweenTries: 1000,
+        // The guard needs an item per requirement to stay aligned, including for the ones that failed.
+        alwaysOutputData: true,
+      }
+    : undefined);
 
 const AIRTABLE_CREDENTIALS = {
   airtableTokenApi: { id: 'airtable-pat', name: 'Airtable Personal Access Token' },
@@ -130,7 +232,16 @@ const airtable = (name: string, position: Position, parameters: Record<string, u
   node(
     name,
     'n8n-nodes-base.airtable',
-    2.1,
+    // 2.2, NOT 2.1, and the difference is the whole record shape. `legacyFlattenOutput` in the node's
+    // own source returns the record untouched at >= 2.2 and hoists `fields` to the top level below it:
+    //
+    //     if (nodeVersion >= 2.2) return record;
+    //     const { fields, ...rest } = record;  return { ...rest, ...fields };
+    //
+    // Every Code node in these workflows reads `r.fields.Key`, so at 2.1 each one read undefined and the
+    // first candidate lookup threw "candidateId is not in the Candidates table" against a table that
+    // plainly contained it. 2.2 is also the installed node's defaultVersion.
+    2.2,
     position,
     {
       base: { __rl: true, mode: 'id', value: '={{ $env.AIRTABLE_BASE_ID }}' },
@@ -150,12 +261,30 @@ const upsert = (name: string, table: string, position: Position) =>
     columns: { mappingMode: 'autoMapInputData', matchingColumns: ['Key'], value: {} },
   });
 
-const loadAll = (name: string, table: string, position: Position) =>
-  airtable(name, position, {
+/**
+ * A table read that runs EXACTLY ONCE and hands its rows on.
+ *
+ * Two n8n behaviours collide here and `executeOnce` is what resolves both.
+ *
+ * An Airtable node runs once per INPUT ITEM, so chaining `Load technologies` into `Load capabilities`
+ * fired the second one once per technology row — 44 sequential searches past Airtable's 5 req/s cap.
+ *
+ * Fanning them off a common parent instead looks like the fix and is not: a node with several incoming
+ * connections executes as soon as the FIRST one delivers, so `Load the record` ran while four of its
+ * five sources were still pending and threw "Node 'Load projects' hasn't been executed". Both workflows
+ * were shaped that way and neither could complete a request; import, round-trip and every structural
+ * test passed regardless, because none of them run the graph.
+ *
+ * Chained plus `executeOnce` gives ordering AND one call per table.
+ */
+const loadAll = (name: string, table: string, position: Position) => ({
+  ...airtable(name, position, {
     operation: 'search',
     table: { __rl: true, mode: 'name', value: table },
     returnAll: true,
-  });
+  }),
+  executeOnce: true,
+});
 
 const ifNode = (name: string, position: Position, leftValue: string) =>
   node(name, 'n8n-nodes-base.if', 2.2, position, {
@@ -302,6 +431,7 @@ const unauthorizedRespond = (position: Position) =>
 const EXTRACTION_MODELS = modelChain('extraction');
 const JD_MODELS = modelChain('jd-parsing');
 const RATIONALE_MODELS = modelChain('rationale');
+const WEIGHING_MODELS = modelChain('weighing');
 
 function buildExtractRequest(): string {
   return `// Builds the OpenRouter request. Every constant here is generated from src/openrouter and
@@ -480,11 +610,18 @@ return [{
  * table; this is the same job with the aliases read out of Airtable.
  */
 function resolveTaxonomyNode(): string {
-  return `const validated = $('Validate extraction').first().json;
+  return `/* ── generated from src/pipeline/portable.ts ─ edit that file, then run \`pnpm n8n:build\` ──
+ *
+ * Only normalize is called here, but the block is emitted whole: a curated subset would be a second
+ * thing to keep in step, which is the problem this file exists to remove.
+ */
+${sharedRules()}
+/* ── end generated ── */
+
+const validated = $('Validate extraction').first().json;
 const candidateId = $('Build extraction request').first().json.candidateId;
 
 const rows = (name) => $(name).all().map((i) => i.json).filter((r) => r && r.fields);
-const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9+#./\\s-]+/g, ' ').replace(/\\s+/g, ' ').trim();
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-\$/g, '');
 const csv = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -499,12 +636,16 @@ const techRows = rows('Load technologies');
 // wording is a different row, so only this candidate's rows are on the table for matching.
 const capRows = rows('Load capabilities').filter((r) => ((r.fields.Candidate || [])[0]) === candidateRow.id);
 
-// Existing row wins. A name that matches an existing row by name OR by alias links to it; anything left
-// over is genuinely new and gets created with a proper Key so the record stays readable.
-const matchTech = (raw) => techRows.find((r) =>
-  [r.fields.Name].concat(csv(r.fields.Aliases)).some((a) => norm(a) === norm(raw)));
-const matchCap = (raw) => capRows.find((r) =>
-  [r.fields.Name].concat(csv(r.fields['Match Terms'])).some((a) => norm(a) === norm(raw)));
+// Existing row wins, resolved with the app's own two-pass matchers — matchTechnologyRow and
+// matchCapabilityRow, generated above from src/pipeline/portable.ts. This node used to compare
+// normalised strings for EQUALITY and nothing else, so "Node.js 20+" and "AWS Lambda functions" —
+// both verbatim in raw/01-tendril-readme.md, and both exactly what the extraction prompt asks the
+// model to produce — resolved in the app and landed in 'unresolved' here. Same blob, different links,
+// therefore different citations at score time.
+const asTech = techRows.map((r) => ({ row: r, name: r.fields.Name, aliases: csv(r.fields.Aliases) }));
+const asCap = capRows.map((r) => ({ row: r, name: r.fields.Name, matchTerms: csv(r.fields['Match Terms']) }));
+const matchTech = (raw) => (matchTechnologyRow(raw, asTech) || {}).row;
+const matchCap = (raw) => (matchCapabilityRow(raw, asCap) || {}).row;
 
 // DELIBERATE DIFFERENCE FROM THE APPLICATION PATH, and worth knowing before you compare them.
 //
@@ -513,6 +654,18 @@ const matchCap = (raw) => capRows.find((r) =>
 // to add. The reason is ordering. Creating a row and linking to it in the same run means the link write
 // can land before the row write, at which point typecast creates a second, keyless row and you have a
 // duplicate that read() then skips. Reporting instead of guessing is the smaller, more honest surface.
+// Which existing row this ingest lands on, by the app's own rule — slug first, then name overlap at
+// 0.8. This node had only the slug arm through the upsert Key, so "Tendril — agent-first IDE" merged in
+// the app and created a second row here: one project split across two, its evidence divided.
+const projectRows = rows('Load projects').filter((r) => ((r.fields.Candidate || [])[0]) === candidateRow.id);
+const existingProject = duplicateProjectOf(
+  // slug from the NAME, not the Key. A non-seed candidate's Key is candidate-prefixed, so
+  // slugOf('candidate-jane-tendril') never equals slugOf('Tendril') and the cheap exact arm was dead
+  // exactly where key collisions were the concern — dedup fell through to name overlap every time.
+  projectRows.map((r) => ({ row: r, name: r.fields.Name, slug: slugOf(r.fields.Name), reviewStatus: r.fields['Review Status'] || 'ok' })),
+  validated.project.Name,
+).duplicate;
+
 const techNames = [];
 const capNames = [];
 const unresolved = [];
@@ -529,7 +682,18 @@ for (const raw of validated.capabilities || []) {
   if (!capNames.includes(hit.fields.Name)) capNames.push(hit.fields.Name);
 }
 
-return [{ json: { techNames, capNames, unresolved, projectName: validated.project.Name, candidateKey: candidateId, candidateName: candidateRow.fields.Name, slugOf: slug('') } }];`;
+return [{ json: {
+  techNames, capNames, unresolved,
+  // RECORD IDS, not names. Airtable resolves a link given as a primary-field string by that string, and
+  // Name is not unique: two candidates can both be "Joel Brannan" (the bundled fixture makes exactly that
+  // pair), and two people can both own a project called "Acme CRM". Writing by name under typecast means
+  // a link can silently land on the wrong person's row, which no candidate-scoped READ can undo. Record
+  // ids are unique by construction, so ownership and citations are written to the row they were resolved
+  // from. Names ride along only for the human-readable payload.
+  techIds: (validated.stack || []).map(matchTech).filter(Boolean).map((r) => r.id).filter((v, i, a) => a.indexOf(v) === i),
+  capIds: (validated.capabilities || []).map(matchCap).filter(Boolean).map((r) => r.id).filter((v, i, a) => a.indexOf(v) === i),
+  candidateRecId: candidateRow.id,
+  projectName: validated.project.Name, candidateKey: candidateId, candidateName: candidateRow.fields.Name, slugOf: slug('') } }];`;
 }
 
 /**
@@ -540,9 +704,11 @@ return [{ json: { techNames, capNames, unresolved, projectName: validated.projec
  * Projects link at all, so they landed in the base as orphans — in a base whose entire point is the link
  * graph, and whose "Proven Capabilities" view filters on `COUNTA({Evidence}) > 0`.
  *
- * The link is written as the project's NAME, not its record id, and the Airtable node runs with
- * `typecast: true`. Airtable then resolves a linked-record value given as a primary-field string, which
- * removes the need to thread record ids through the workflow.
+ * Links are written as RECORD IDS. Writing them as primary-field strings under `typecast` was simpler
+ * and wrong: Airtable resolves such a value by matching the target's primary field, and Name is not
+ * unique. Two candidates can share a name and two people can each own an "Acme CRM", so a receipt could
+ * attach to the wrong person's project — a cross-candidate leak written at insert time, which no
+ * candidate-scoped read can detect or undo afterwards.
  */
 function fanOutEvidenceNode(): string {
   return `const validated = $('Validate extraction').first().json;
@@ -550,6 +716,9 @@ const resolved = $('Resolve taxonomy').first().json;
 const DEFAULT_CANDIDATE_ID = ${JSON.stringify(DEFAULT_CANDIDATE_ID)};
 const projectKey = validated.project.key;
 const projectName = validated.project.Name;
+// The row 'Write project' just created or updated. Airtable returns the record it wrote, so this is the
+// exact row these receipts belong to rather than whichever row happens to share its Name.
+const projectRecId = $('Write project').first().json.id;
 const today = new Date().toISOString().slice(0, 10);
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-\$/g, '');
@@ -563,13 +732,15 @@ const scope = resolved.candidateKey === DEFAULT_CANDIDATE_ID
 return (validated.evidence || []).map((e) => ({
   json: {
     Key: ('ev-' + scope + '-' + slug(e.label) + '-' + slug(e.value).slice(0, 24)).slice(0, 96),
-    Candidate: [resolved.candidateName],
+    // Links by record id. The project row was just written by 'Write project', which is why that node
+    // comes first in the graph; its id is exact where its Name is merely probable.
+    Candidate: [resolved.candidateRecId],
     Label: e.label,
     Kind: e.kind,
     Value: e.value,
     URL: e.url || '',
     'Verified On': today,
-    Projects: [projectName],
+    Projects: [projectRecId],
   },
 }));`;
 }
@@ -577,35 +748,52 @@ return (validated.evidence || []).map((e) => ({
 /**
  * The Project row, with its taxonomy links attached in the same write.
  *
- * Linked-record fields are given as primary-field strings and the node runs with `typecast: true`;
- * Airtable resolves them to record ids, which removes any need to thread opaque ids through the
- * workflow. Verified against the installed node source: `options.typecast` becomes `body.typecast`, and
- * `matchingColumns: ['Key']` becomes Airtable's native `performUpsert.fieldsToMergeOn`.
+ * Linked-record fields are given as record ids, resolved in `Resolve taxonomy` from the rows it matched.
+ * `typecast` stays on for the non-link fields (a select option written as its label), but no link
+ * depends on it any more. Verified against the installed node source: `options.typecast` becomes
+ * `body.typecast`, and `matchingColumns: ['Key']` becomes Airtable's native
+ * `performUpsert.fieldsToMergeOn`.
  */
 function projectRowNode(): string {
-  return `const validated = $('Validate extraction').first().json;
+  return `/* ── generated from src/pipeline/portable.ts — edit that file, then run \`pnpm n8n:build\` ── */
+${sharedRules()}
+/* ── end generated ── */
+
+const validated = $('Validate extraction').first().json;
 const resolved = $('Resolve taxonomy').first().json;
 const DEFAULT_CANDIDATE_ID = ${JSON.stringify(DEFAULT_CANDIDATE_ID)};
 
 const { key, ...fields } = validated.project;
-// The seed candidate's project ids stay plain slugs (the seed and every test know them); any other
-// candidate's are candidate-scoped — the convention src/pipeline/index.ts sets, so two people's
-// "Tendril" rows never collide on Key.
-const scopedKey = resolved.candidateKey === DEFAULT_CANDIDATE_ID ? key : resolved.candidateKey + '-' + key;
+// The rule is scopedKey, generated above from src/pipeline/portable.ts. This line used to state it
+// by hand — and when the shared function arrived the two collided by name, which is constraint 2 in
+// that file's header doing its job rather than a coincidence.
+const projectKey = scopedKey(resolved.candidateKey, key, DEFAULT_CANDIDATE_ID);
 
 return [{
   json: {
-    Key: scopedKey,
+    Key: projectKey,
     ...fields,
-    Candidate: [resolved.candidateName],
-    Technologies: resolved.techNames,
-    Capabilities: resolved.capNames,
+    // Links by record id, resolved in 'Resolve taxonomy' from the rows it actually matched, UNIONED
+    // with whatever the existing row already carried. An Airtable upsert replaces a linked-record cell
+    // rather than appending, so writing only this run's links erased the rest: on the documented dedup
+    // demo, a second ingest of Tendril dropped React, Vite, Tailwind, Electron, SQLite, Stripe and
+    // Cognito from the seeded row — and with them the reverse technology.projects entries that
+    // resolution credits when it decides which projects a requirement cites. The app has always merged
+    // before writing (mergeProject in src/pipeline/link.ts).
+    Candidate: [resolved.candidateRecId],
+    Technologies: unionLinks(resolved.existingTechIds, resolved.techIds),
+    Capabilities: unionLinks(resolved.existingCapIds, resolved.capIds),
   },
 }];`;
 }
 
 function reviewStubNode(): string {
-  return `// The error branch. A rejection becomes a REAL ROW with the reason attached, not a log line.
+  return `const DEFAULT_CANDIDATE_ID = ${JSON.stringify(DEFAULT_CANDIDATE_ID)};
+/* ── generated from src/pipeline/portable.ts — edit that file, then run \`pnpm n8n:build\` ── */
+${sharedRules()}
+/* ── end generated ── */
+
+// The error branch. A rejection becomes a REAL ROW with the reason attached, not a log line.
 //
 // A pipeline that discards what it cannot parse produces output that looks complete and is not, and the
 // omission is invisible — the report simply never mentions the thing. A visible bad row is worth more
@@ -625,9 +813,13 @@ return [{
     // 'Key', not 'key'. autoMapInputData matches Airtable column names exactly and matchingColumns is
     // ["Key"], so a lower-case key never matches and the parked record is never written. The error
     // branch would itself have failed silently, which would have been a particularly bad joke.
-    Key: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+    //
+    // Scoped by candidate, like the success path at 'Build project row'. sourceName defaults to
+    // 'pasted-input' at every entry point, so this key collided across applicants: A's parked row
+    // ceased to exist and reappeared inside B's record, after A had been told it was parked.
+    Key: scopedKey(candidateId, slugOf(label), DEFAULT_CANDIDATE_ID),
     Name: label,
-    Candidate: [candidateRow.fields.Name],
+    Candidate: [candidateRow.id],
     Status: 'in-development',
     Summary: 'Extraction did not produce a usable record from ' + failure.sourceName + '.',
     'Review Status': 'needs-review',
@@ -670,17 +862,37 @@ const extractWorkflow = (() => {
     code('Validate extraction', [1060, 260], validateNode()),
     ifNode('Usable record?', [1280, 260], '={{ $json.valid }}'),
 
-    loadAll('Load candidates', 'Candidates', [1520, 60]),
-    loadAll('Load technologies', 'Technologies', [1740, 60]),
-    loadAll('Load capabilities', 'Capabilities', [1960, 60]),
+    // Fanned off the gate, not chained one into the next. At Airtable typeVersion 2.1 a search runs
+    // ONCE PER INPUT ITEM, so chaining meant 'Load capabilities' fired once per technology row — 44
+    // sequential searches straight past Airtable's 5 req/s per-base cap. A 429 there aborts after the
+    // OpenRouter spend and before any write, including the review stub, which is the opposite of the
+    // canvas's own promise that failures are stored rather than dropped. match-role already fans.
+    loadAll('Load candidates', 'Candidates', [1520, -60]),
+    loadAll('Load technologies', 'Technologies', [1520, 60]),
+    loadAll('Load capabilities', 'Capabilities', [1520, 180]),
+    // Loaded so the dedup path can UNION rather than replace. An Airtable upsert overwrites a
+    // linked-record cell — there is no append — so without the existing row a second ingest of the same
+    // project erased every link the first one wrote.
+    loadAll('Load projects', 'Projects', [1520, 300]),
     code('Resolve taxonomy', [2180, 60], resolveTaxonomyNode()),
     code('Build project row', [2400, 60], projectRowNode()),
     upsert('Write project', 'Projects', [2620, 60]),
 
-    code('Fan out evidence', [2840, 180], fanOutEvidenceNode()),
-    upsert('Write evidence rows', 'Evidence', [3060, 180]),
+    code('Fan out evidence', [2840, 60], fanOutEvidenceNode()),
+    upsert('Write evidence rows', 'Evidence', [3060, 60]),
 
-    respond('Respond', [2840, -40],
+    // Its OWN branch off the write, positioned BELOW the evidence branch. Two things have to hold at
+    // once and only this shape gives both:
+    //
+    //   The writes must finish first. Under executionOrder v1 branches run top-to-bottom by position,
+    //   and this node used to sit ABOVE — so it answered ok:true before 'Write evidence rows' ran at
+    //   all, and a 429 there left a project with no receipts and a caller already told it succeeded.
+    //   A failing write now aborts the run before this node is reached, which is the honest outcome.
+    //
+    //   It must still answer when there is no evidence. A project with no receipts is legitimate, and
+    //   an empty branch simply stops — so chaining Respond after the write would hang that request.
+    //   Hanging on the empty case is how the first version of this fix broke it.
+    respond('Respond', [2840, 220],
       `={{ {\n` +
       `  ok: true,\n` +
       `  project: $('Build project row').first().json.Name,\n` +
@@ -688,7 +900,11 @@ const extractWorkflow = (() => {
       `  technologiesLinked: $('Resolve taxonomy').first().json.techNames.length,\n` +
       `  capabilitiesLinked: $('Resolve taxonomy').first().json.capNames.length,\n` +
       `  unresolved: $('Resolve taxonomy').first().json.unresolved,\n` +
-      `  evidenceWritten: ($('Validate extraction').first().json.evidence || []).length,\n` +
+      // 'Fan out evidence' always executes (one item in from the project write) and emits one item per
+      // evidence row, so this is the real count including zero — and it is only read after the write
+      // branch has run. Reading the write node directly would throw on the empty case, where it never
+      // executed at all. It used to count the VALIDATOR's list, which is what we meant to write.
+      `  evidenceWritten: $('Fan out evidence').all().length,\n` +
       `  warnings: $('Validate extraction').first().json.warnings\n` +
       `} }}`),
 
@@ -735,10 +951,11 @@ const extractWorkflow = (() => {
     // error branch so even a parked row knows its owner.
     ['Usable record?', 'Load candidates', 0],
     ['Usable record?', 'Load candidates for review', 1],
-    ['Load candidates', 'Load technologies'],
     ['Load candidates for review', 'Build review row'],
+    ['Load candidates', 'Load technologies'],
     ['Load technologies', 'Load capabilities'],
-    ['Load capabilities', 'Resolve taxonomy'],
+    ['Load capabilities', 'Load projects'],
+    ['Load projects', 'Resolve taxonomy'],
     ['Resolve taxonomy', 'Build project row'],
     ['Build project row', 'Write project'],
     // Two branches off the write. The evidence branch may legitimately be empty (a project with no
@@ -768,26 +985,30 @@ function retrieveAndScoreNode(): string {
 // Thresholds generated from src/pipeline/score.ts.
 const THRESHOLD_PROVEN = ${THRESHOLD_PROVEN};
 const THRESHOLD_PARTIAL = ${THRESHOLD_PARTIAL};
-const MAX_CITED = 4;
-const MAX_CITED_PROJECTS = 3;
 
-const normalize = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9+#./\\s-]+/g, ' ').replace(/\\s+/g, ' ').trim();
-const escapeRe = (s) => s.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
+/* ── generated from src/pipeline/portable.ts — edit that file, then run \`pnpm n8n:build\` ──
+ *
+ * Everything between here and the end of this block is the app's own source, type-stripped. The rules
+ * that decide a verdict are not restated in this workflow; they are compiled into it. Editing them here
+ * is pointless — the next build overwrites it, and tests/workflow-parity.test.ts fails in the meantime.
+ */
+${sharedRules()}
+/* ── end generated ── */
 
-// Plurals matter ("structured output" vs "structured outputs") and so do hyphens: a single-word term
-// must not match inside a compound, or "react" matches "react-three-fiber" and the report cites a
-// Unity game as React experience.
-const containsTerm = (haystack, needle) => {
-  const term = normalize(needle);
-  if (!term) return false;
-  if (term.indexOf(' ') !== -1) {
-    return new RegExp('(?<![a-z0-9])' + escapeRe(term) + '(?:e?s)?(?![a-z0-9])', 'i').test(haystack.replace(/-/g, ' '));
-  }
-  return new RegExp('(?<![a-z0-9-])' + escapeRe(term) + '(?:e?s)?(?![a-z0-9-])', 'i').test(haystack);
+const parsed = $('Posting requirements').first().json;
+const rows = $('Load the record').first().json;
+
+// One normalisation, then everything below is the app's own functions. Airtable rows carry Key as the
+// logical id and id as the opaque record id; resolution reads id, so the two are swapped here once
+// rather than at every call site.
+const snap = {
+  technologies: rows.technologies.map((t) => ({ id: t.key, projects: t.projects || [] })),
+  capabilities: rows.capabilities.map((c) => ({ id: c.key, tier: c.tier, projects: c.projects || [], evidence: c.evidence || [] })),
+  projects: rows.projects.map((p) => ({ id: p.key, reviewStatus: p.reviewStatus, evidence: p.evidence || [] })),
+  evidence: rows.evidence.map((e) => ({ id: e.key, label: e.label })),
 };
 
-const parsed = JSON.parse($('Parse the posting').first().json.choices[0].message.content);
-const rows = $('Load the record').first().json;
+const embedded = $('Collect vectors').first().json;
 
 const requirements = (parsed.requirements || []).map((r, i) => ({
   id: 'req-' + (i + 1),
@@ -797,109 +1018,72 @@ const requirements = (parsed.requirements || []).map((r, i) => ({
 })).filter((r) => r.text);
 
 const results = [];
-for (const req of requirements) {
+requirements.forEach((req, reqIndex) => {
   const haystack = normalize(req.text);
   const candidates = [];
+  // Absent when the embeddings call failed or returned short, which drops this requirement to lexical
+  // only — reported, never hidden.
+  const reqVector = embedded.ok ? embedded.requirementVectors[reqIndex] : undefined;
 
+  // HYBRID: the better of a literal hit and a semantic one, exactly as src/pipeline/match.ts does. The
+  // workflow scored lexical alone, so a posting describing a capability without naming it read as a gap
+  // in this lane and as coverage in the app.
   for (const tech of rows.technologies) {
-    const aliases = [tech.name].concat(tech.aliases || []);
-    if (aliases.some((a) => containsTerm(haystack, a))) {
-      candidates.push({ kind: 'technology', id: tech.key, name: tech.name, score: 1 });
-    }
+    const lexical = lexicalTechnologyScore(haystack, tech);
+    const dense = denseScore(reqVector, embedded.vectors[vectorKeyFor('technology', tech.key)]);
+    const score = Math.max(lexical, dense);
+    if (score > 0) candidates.push({ kind: 'technology', id: tech.key, name: tech.name, score: score });
   }
   for (const cap of rows.capabilities) {
-    const terms = [cap.name].concat(cap.matchTerms || []);
-    if (terms.some((t) => containsTerm(haystack, t))) {
-      candidates.push({ kind: 'capability', id: cap.key, name: cap.name, score: 1 });
-    }
+    // Scored against the RAW requirement text as well as the normalised haystack: the overlap fallback
+    // inside tokenises for itself, and handing it a pre-normalised string changes its answer.
+    const lexical = lexicalCapabilityScore(req.text, haystack, cap);
+    const dense = denseScore(reqVector, embedded.vectors[vectorKeyFor('capability', cap.key)]);
+    const score = Math.max(lexical, dense);
+    if (score > 0) candidates.push({ kind: 'capability', id: cap.key, name: cap.name, score: score });
   }
 
   candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-  const cited = candidates.slice(0, MAX_CITED);
+  const cited = topCited(candidates);
   const best = cited.length ? cited[0].score : 0;
 
-  const caps = cited.filter((c) => c.kind === 'capability').map((c) => rows.capabilities.find((x) => x.key === c.id)).filter(Boolean);
-
-  // Projects are derived, never matched directly, and ranked by how many matched rows each contains.
-  const hits = {};
-  const credit = (ids) => (ids || []).forEach((id) => {
-    const p = rows.projects.find((x) => x.key === id);
-    if (!p || p.reviewStatus === 'needs-review') return;   // a parked record proves nothing yet
-    hits[id] = (hits[id] || 0) + 1;
-  });
-  cited.filter((c) => c.kind === 'technology').forEach((c) => credit((rows.technologies.find((t) => t.key === c.id) || {}).projects));
-  caps.forEach((c) => credit(c.projects));
-
-  const matchedProjects = Object.keys(hits).sort((a, b) => hits[b] - hits[a] || a.localeCompare(b)).slice(0, MAX_CITED_PROJECTS);
-
-  const evidenceIds = {};
-  caps.forEach((c) => (c.evidence || []).forEach((e) => (evidenceIds[e] = true)));
-  matchedProjects.forEach((id) => ((rows.projects.find((p) => p.key === id) || {}).evidence || []).forEach((e) => (evidenceIds[e] = true)));
-  const evidence = Object.keys(evidenceIds);
-
-  // THE EVIDENCE GATE. A capability with nothing linked to it cannot score as proven, however cleanly
-  // it matched. Adding a capability row is easy; making it count should not be.
-  let status, shortfall = null;
-  if (best < THRESHOLD_PARTIAL) {
-    status = 'gap';
-    shortfall = 'nothing in the record matches this closely enough to claim';
-  } else if (best < THRESHOLD_PROVEN) {
-    status = 'partial';
-    shortfall = 'matched, but not closely enough to call it a direct hit';
-  } else if (!evidence.length) {
-    status = 'partial';
-    shortfall = 'matched, but nothing verifiable is linked to it';
-  } else if (caps.length && caps.every((c) => c.tier === 'stretch')) {
-    status = 'partial';
-    shortfall = 'the matching capability is recorded as a stretch, not as shipped work';
-  } else if (caps.length && caps.every((c) => !(c.evidence || []).length)) {
-    status = 'partial';
-    shortfall = 'the matching capability has no evidence linked, so it reads as unverified';
-  } else {
-    status = 'proven';
-  }
+  // THE DETERMINISTIC FLOOR. resolveRequirement runs the projects/evidence derivation and the evidence
+  // gate — generated above from src/pipeline/portable.ts, so this cannot drift from src/pipeline/score.ts.
+  // No strength is passed: this is the answer before any model was consulted, and 'Apply weighing'
+  // compares against it.
+  const resolution = resolveRequirement(cited, best, snap, { thresholdProven: THRESHOLD_PROVEN, thresholdPartial: THRESHOLD_PARTIAL });
 
   results.push({
     requirementId: req.id,
     requirement: req,
-    status,
+    status: resolution.status,
     score: Number(best.toFixed(3)),
-    shortfall,
-    matchedTechnologies: cited.filter((c) => c.kind === 'technology').map((c) => c.id),
-    matchedCapabilities: cited.filter((c) => c.kind === 'capability').map((c) => c.id),
-    matchedProjects,
-    evidence,
+    shortfall: resolution.shortfall,
+    matchedTechnologies: resolution.matchedTechnologies,
+    matchedCapabilities: resolution.matchedCapabilities,
+    matchedProjects: resolution.matchedProjects,
+    evidence: resolution.evidence,
+    // Carried so the weighing pass can be asked about the same rows, and so 'Apply weighing' can
+    // re-resolve from them rather than trusting anything the model returns.
+    cited: cited,
+    best: best,
   });
-}
+});
 
-// Weighted coverage: a required item is worth twice a preferred one, and a partial counts as half.
-// Weighted rather than counted, because a posting with three must-haves and eleven nice-to-haves should
-// not score 79% while missing every must-have.
-const WEIGHT = { required: 1, preferred: 0.5 };
-const VALUE = { proven: 1, partial: 0.5, gap: 0 };
-let earned = 0, possible = 0;
-const tally = { proven: 0, partial: 0, gap: 0 };
-let requiredCovered = 0, requiredTotal = 0;
-
-for (const r of results) {
-  const w = WEIGHT[r.requirement.kind];
-  earned += w * VALUE[r.status];
-  possible += w;
-  tally[r.status] += 1;
-  if (r.requirement.kind === 'required') { requiredTotal += 1; if (r.status === 'proven') requiredCovered += 1; }
-}
+// Weighted coverage — coverageOf, generated above from src/pipeline/portable.ts. The weights are not
+// restated here on purpose: a hand-typed pair in this node is exactly how the two lanes came to publish
+// different percentages for the same posting.
+const coverage = coverageOf(results.map((r) => ({ kind: r.requirement.kind, status: r.status })));
 
 return [{
   json: {
+    retrieval: embedded.ok ? 'hybrid' : 'lexical',
+    retrievalDetail: embedded.detail,
     title: parsed.title || 'Untitled role',
     company: parsed.company || '',
     requirements,
     results,
-    coverage: {
-      score: possible ? Math.round((earned / possible) * 100) : 0,
-      proven: tally.proven, partial: tally.partial, gap: tally.gap,
-      requiredCovered, requiredTotal,
-    },
+    coverage,
   },
 }];`;
 }
@@ -943,32 +1127,525 @@ const evidenceRows = evidenceAll.filter(mine);
 const links = (fields, field) => (fields[field] || []).map((id) => byRecord[id]).filter(Boolean);
 const csv = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
+// Only the metrics that are actually set, in the adapter's order — an absent metric must be absent,
+// not zero, or the context reads "0 tests" about a project nobody counted.
+const metricsOf = (f) => {
+  const out = {};
+  if (f.LOC !== undefined && f.LOC !== null) out.loc = f.LOC;
+  if (f.Tests !== undefined && f.Tests !== null) out.tests = f.Tests;
+  if (f.Commits !== undefined && f.Commits !== null) out.commits = f.Commits;
+  if (f.Files !== undefined && f.Files !== null) out.files = f.Files;
+  return out;
+};
+
+// Every row carries the record id it was read from, so the write side can cite the exact row that
+// matched instead of asking Airtable to find one by display name. Name is not unique — two candidates
+// can share one (the bundled fixture makes that pair), and so can two people's projects — so a link
+// written by name can land on the wrong person's row, which no candidate-scoped read can undo.
 return [{
   json: {
-    candidate: { key: candidateId, name: candidateRow.fields.Name },
+    candidate: { key: candidateId, name: candidateRow.fields.Name, id: candidateRow.id },
     projects: projectRows.map((r) => ({
+      id: r.id,
       key: r.fields.Key, name: r.fields.Name, status: r.fields.Status,
+      // Started, Summary and the four metrics are here because the rationale context is built from
+      // them. Projecting a narrower project row than the app reads made the guard's corpus narrower
+      // than the model's prompt, so a sentence citing a real metric was rejected as a fabrication.
+      // The key order matches src/store/airtable.ts, because the context prints them in object order.
+      started: r.fields.Started, summary: r.fields.Summary,
+      metrics: metricsOf(r.fields),
       reviewStatus: r.fields['Review Status'] || 'ok',
       evidence: links(r.fields, 'Evidence'),
     })),
     technologies: techRows.map((r) => ({
+      id: r.id,
       key: r.fields.Key, name: r.fields.Name, aliases: csv(r.fields.Aliases),
       projects: links(r.fields, 'Projects'),
     })),
     capabilities: capRows.map((r) => ({
+      id: r.id,
       key: r.fields.Key, name: r.fields.Name, tier: r.fields.Tier,
       matchTerms: csv(r.fields['Match Terms']),
       projects: links(r.fields, 'Projects'), evidence: links(r.fields, 'Evidence'),
     })),
     evidence: evidenceRows.map((r) => ({
+      id: r.id,
       key: r.fields.Key, label: r.fields.Label, value: r.fields.Value, url: r.fields.URL || null,
     })),
   },
 }];`;
 }
 
+/**
+ * Read the posting in code first, exactly as src/pipeline/jd.ts does.
+ *
+ * The workflow used to wire its webhook straight into the parse model, unconditionally. That is not a
+ * missing optimisation — it is a different answer. On the bundled sample the model returns 18
+ * paraphrased requirements and scores 66; the deterministic reader takes the 16 bullets verbatim and
+ * scores 75. Both lanes upsert the SAME Roles key, so a same-day n8n run silently rewrote the app's row
+ * and the pinned 75/10/4/2/16 anchor was an app-lane-only fact.
+ *
+ * The gate is the PASS that answered, not a requirement count — see jd.ts for why that replaced
+ * "fewer than four" in 2026-07-30. Bulleted or unmarked is read verbatim and no model is called at all.
+ */
+function readPostingNode(): string {
+  return `// READ THE POSTING WITHOUT A MODEL.
+/* ── generated from src/pipeline/portable.ts — edit that file, then run \`pnpm n8n:build\` ── */
+${sharedRules()}
+/* ── end generated ── */
+
+const READ_VERBATIM = ['bulleted', 'unmarked'];
+
+const body = $input.first().json.body || $input.first().json;
+const text = String(body.text || '');
+if (!text.trim()) {
+  throw new Error('no posting text supplied');
+}
+
+const role = parseRoleDeterministically(text);
+// Prose, or nothing at all, is the one shape a model reads better. Everything else is already exact.
+const needsModel = READ_VERBATIM.indexOf(role.pass) === -1;
+
+return [{ json: { text: text, role: role, pass: role.pass, needsModel: needsModel, candidateId: body.candidateId || '' } }];`;
+}
+
+/**
+ * The single name everything downstream reads, whichever branch ran.
+ *
+ * Both branches of `Needs a model?` land here, so the rest of the workflow references ONE node instead
+ * of reaching into `Parse the posting`, which does not execute on the deterministic path. It also
+ * carries the provenance: `Build role row` used to hardcode JD_MODELS[0] into the Roles row, so a
+ * fallthrough to the second model in the chain left no trace — the exact event the repo's "never a
+ * silent fallback" rule exists to expose.
+ */
+function postingRequirementsNode(): string {
+  return `// WHICHEVER PASS ANSWERED, in one shape.
+/* ── generated from src/pipeline/portable.ts — edit that file, then run \`pnpm n8n:build\` ── */
+${sharedRules()}
+/* ── end generated ── */
+
+const read = $('Read the posting').first().json;
+const item = $input.first().json;
+
+// A model reply carries choices; the deterministic item does not.
+if (item && item.choices) {
+  const parsed = JSON.parse(item.choices[0].message.content);
+  const requirements = (parsed.requirements || []).map((r, i) => ({
+    id: 'req-' + (i + 1),
+    text: String(r.text || ''),
+    kind: r.kind === 'preferred' ? 'preferred' : 'required',
+    category: r.category || 'process',
+  })).filter((r) => r.text);
+
+  return [{ json: {
+    title: parsed.title || read.role.title || 'Untitled role',
+    company: parsed.company || read.role.company || '',
+    requirements: requirements,
+    via: 'model',
+    // The model OpenRouter actually served, not the first one we asked for.
+    model: item.model || 'unknown',
+    note: 'Parsed by a model because the posting reads as prose.',
+  } }];
+}
+
+if (read.role.requirements.length === 0) {
+  // Never a blank report: the app raises UnreadablePostingError here rather than rendering zero rows.
+  throw new Error('the posting could not be read as requirements');
+}
+
+return [{ json: {
+  title: read.role.title,
+  company: read.role.company,
+  requirements: read.role.requirements,
+  via: 'deterministic',
+  model: 'none',
+  note: read.pass === 'bulleted' ? null : 'Read as an unmarked list.',
+} }];`;
+}
+
+/**
+ * Builds the posting-parse request, because an n8n parameter is only an EXPRESSION when it starts
+ * with `=`.
+ *
+ * This node exists to fix a defect that made the whole match lane inert. `jsonBody` was a
+ * `JSON.stringify({...})` — a string starting with `{` — with `={{ $json.body.text }}` nested inside
+ * it. n8n's `isExpression` is `expr.charAt(0) === '='` and `resolveSimpleParameterValue` returns any
+ * other string untouched, so the nested `{{ }}` was never resolved: OpenRouter received the eleven
+ * characters `={{ $json.` and so on as the job posting, and scored a real applicant against it. The
+ * workflow imported cleanly, round-tripped cleanly, and drift-checked cleanly the entire time, because
+ * none of those execute it.
+ *
+ * Prefixing the existing string with `=` is NOT the fix. That makes the whole body one template, and a
+ * posting containing a quote or a newline — every pasted posting — would be substituted in raw and
+ * produce invalid JSON. Building the object here and sending `={{ JSON.stringify($json.request) }}`
+ * escapes it exactly once, which is why `Build extraction request` has always done it this way.
+ */
+function buildParseRequest(): string {
+  return `// Builds the OpenRouter request for the posting parse. Constants generated from src/openrouter
+// and src/pipeline/jd.ts. Do not hand-edit: pnpm n8n:build --check will fail.
+const MODELS = ${JSON.stringify(JD_MODELS)};
+const SYSTEM = ${JSON.stringify(JD_SYSTEM)};
+const SCHEMA = ${JSON.stringify(ROLE_PARSE_SCHEMA)};
+
+// Arrives from 'Read the posting', which already validated it.
+const text = String($input.first().json.text || '').slice(0, 24000);
+
+return [{
+  json: {
+    text: text,
+    request: {
+      models: MODELS,
+      max_tokens: 1200,
+      temperature: 0,
+      messages: [
+        { role: 'system', content: SYSTEM },
+        { role: 'user', content: text },
+      ],
+      response_format: { type: 'json_schema', json_schema: { name: 'role_parse', strict: true, schema: SCHEMA } },
+      // Stops OpenRouter routing to an endpoint that ignores response_format and answers in prose
+      // with a 200.
+      provider: { require_parameters: true },
+    },
+  },
+}];`;
+}
+
+/**
+ * Everything that gets embedded, in one request.
+ *
+ * The workflow had no embeddings call at all: it scored from lexical hits alone and printed a
+ * dense-only match as a gap, while src/ui/api.ts published embeddings as "ready — handled inside the
+ * workflow". The app makes two calls (corpus, then requirements) because they are separate batches in
+ * separate functions; embedding is per-text, so one call returning both in a known order is the same
+ * vectors and one fewer round trip. The offset is recorded rather than recomputed, because guessing
+ * where the corpus stops and the queries start is how every requirement ends up paired with the wrong
+ * capability.
+ */
+function buildEmbedRequestNode(): string {
+  return `// EMBED THE RECORD AND THE POSTING, in one request.
+/* ── generated from src/pipeline/portable.ts — edit that file, then run \`pnpm n8n:build\` ── */
+${sharedRules()}
+/* ── end generated ── */
+
+const MODEL = ${JSON.stringify(EMBEDDING_MODEL)};
+
+const parsed = $('Posting requirements').first().json;
+const rows = $('Load the record').first().json;
+
+const keys = [];
+const texts = [];
+for (const tech of rows.technologies) {
+  keys.push(vectorKeyFor('technology', tech.key));
+  texts.push(embedTextForRow(tech));
+}
+for (const cap of rows.capabilities) {
+  keys.push(vectorKeyFor('capability', cap.key));
+  texts.push(embedTextForRow(cap));
+}
+
+const requirements = (parsed.requirements || []).map((r) => String(r.text || '')).filter(Boolean);
+const corpusCount = texts.length;
+
+return [{ json: {
+  keys: keys,
+  corpusCount: corpusCount,
+  requirementCount: requirements.length,
+  request: { model: MODEL, input: texts.concat(requirements), encoding_format: 'float' },
+} }];`;
+}
+
+/**
+ * Split the response back into a corpus lookup and one vector per requirement.
+ *
+ * OpenRouter documents an \`index\` on each row, and it is honoured rather than assumed: a reordered
+ * batch would pair every requirement with the wrong capability, and nothing downstream could tell.
+ * A short, empty or failed response degrades to lexical-only and SAYS SO — 'Retrieve and score' reads
+ * \`ok\` and the Respond node reports the retrieval mode, because a hidden degradation is the one thing
+ * this repo's "never a silent fallback" rule exists to prevent.
+ */
+function collectVectorsNode(): string {
+  return `// SPLIT THE EMBEDDINGS BACK OUT, or degrade to lexical and say so.
+const asked = $('Build embed request').first().json;
+const payload = $input.first().json;
+
+const rowsOut = (payload && payload.data) || [];
+const expected = asked.corpusCount + asked.requirementCount;
+
+let ok = rowsOut.length === expected;
+const ordered = new Array(expected);
+if (ok) {
+  rowsOut.forEach((row, i) => {
+    const at = typeof row.index === 'number' ? row.index : i;
+    ordered[at] = row.embedding || [];
+  });
+  ok = ordered.every((v) => v && v.length > 0);
+}
+
+if (!ok) {
+  // Not an error: retrieval falls back to lexical, which is a real degradation and a correct one.
+  return [{ json: { ok: false, vectors: {}, requirementVectors: [], detail: rowsOut.length === 0 ? 'no embeddings returned' : 'expected ' + expected + ' vectors, got ' + rowsOut.length } }];
+}
+
+const vectors = {};
+asked.keys.forEach((k, i) => { vectors[k] = ordered[i]; });
+
+return [{ json: {
+  ok: true,
+  vectors: vectors,
+  requirementVectors: ordered.slice(asked.corpusCount),
+  detail: null,
+} }];`;
+}
+
+/**
+ * One weighing call per requirement, so a model can lower a verdict but never raise one.
+ *
+ * The workflow had no weighing pass at all: it called gateStatus without `strength`, so the
+ * `weighedThin` branch was dead by construction and the app's four guards protected one lane. CLAUDE.md
+ * lists "weighing can only lower a verdict" among the non-negotiables. Both lanes upsert the same Roles
+ * key, so the lane without weighing could overwrite the lane with it — which is how a guarantee that
+ * holds everywhere it is tested still fails in production.
+ *
+ * A requirement with nothing cited is flagged `skip`, and 'Apply weighing' discards whatever comes back
+ * for it — there is nothing to weigh, and asking invites the model to invent something to weigh.
+ *
+ * KNOWN COST, stated rather than hidden: the item is still emitted, so the http node still calls the
+ * model for it. src/pipeline/judge.ts returns early on an empty candidate list and makes no call at all,
+ * so this lane spends one request per unweighable requirement more than the app does. It is safe —
+ * `applyJudgments` drops every id it did not send, so the requirement falls through to unweighed — and
+ * the obvious fix is worse: filtering the skipped items out means a posting where nothing matches emits
+ * an empty branch, 'Apply weighing' never executes, and 'Fan out rationales' throws reading it.
+ */
+function fanOutJudgeNode(): string {
+  return `// FAN OUT: one weighing call per requirement, exactly as src/pipeline/index.ts does.
+const MODELS = ${JSON.stringify(WEIGHING_MODELS)};
+const SYSTEM = ${JSON.stringify(WEIGHING_SYSTEM)};
+const SCHEMA = ${JSON.stringify(JUDGMENT_SCHEMA)};
+
+const scored = $('Retrieve and score').first().json;
+const rows = $('Load the record').first().json;
+
+const capOf = (key) => rows.capabilities.find((c) => c.key === key);
+const techOf = (key) => rows.technologies.find((t) => t.key === key);
+const projOf = (key) => rows.projects.find((p) => p.key === key);
+const evOf = (key) => rows.evidence.find((e) => e.key === key);
+
+return scored.results.map((r, i) => {
+  // Everything the weighing model may see about this requirement: the rows retrieval returned, what
+  // each is, and the receipts each carries. It never sees the base, so it cannot name a row that did
+  // not match — and applyJudgments drops any id it returns that was not sent.
+  const lines = ['Requirement (' + r.requirement.kind + '): ' + r.requirement.text, '', 'Retrieved rows:'];
+  for (const c of r.cited) {
+    if (c.kind === 'capability') {
+      const cap = capOf(c.id) || {};
+      const receipts = (cap.evidence || []).map((k) => (evOf(k) || {}).label).filter(Boolean);
+      lines.push('- id=' + c.id + ' [capability, tier ' + (cap.tier || 'unknown') + '] ' + c.name +
+        (receipts.length ? ' — receipts: ' + receipts.join('; ') : ' — no receipts linked'));
+    } else {
+      const tech = techOf(c.id) || {};
+      const projects = (tech.projects || []).map((k) => (projOf(k) || {}).name).filter(Boolean);
+      lines.push('- id=' + c.id + ' [technology] ' + c.name +
+        (projects.length ? ' — used in: ' + projects.join(', ') : ' — no projects linked'));
+    }
+  }
+
+  return { json: {
+    __index: i,
+    requirementId: r.requirementId,
+    skip: r.cited.length === 0,
+    request: {
+      models: MODELS,
+      max_tokens: 700,
+      temperature: 0,
+      messages: [
+        { role: 'system', content: SYSTEM },
+        { role: 'user', content: lines.join('\\n') },
+      ],
+      response_format: { type: 'json_schema', json_schema: { name: 'match_judgment', strict: true, schema: SCHEMA } },
+      provider: { require_parameters: true },
+    },
+  } };
+});`;
+}
+
+/**
+ * Resolve every requirement a SECOND time with the model's numbers, and keep whichever came out worse.
+ *
+ * This is the whole guarantee. It holds for a reply that rates every row 1.0, for one naming ids from
+ * another candidate's record, and for one written by someone who wants a better score, because none of
+ * those can produce a status that beats an answer the model was never consulted about — the
+ * deterministic resolution computed in 'Retrieve and score' before any model ran.
+ *
+ * A failed or malformed call costs that requirement its weighing, not the run: the deterministic answer
+ * stands, which is exactly what the app does when callJson returns not-ok.
+ */
+function applyWeighingNode(): string {
+  return `// WEIGH, THEN KEEP THE WORSE. src/pipeline/score.ts worseOf, DESIGN.md v3.8.
+const THRESHOLD_PROVEN = ${THRESHOLD_PROVEN};
+const THRESHOLD_PARTIAL = ${THRESHOLD_PARTIAL};
+
+/* ── generated from src/pipeline/portable.ts — edit that file, then run \`pnpm n8n:build\` ── */
+${sharedRules()}
+/* ── end generated ── */
+
+const scored = $('Retrieve and score').first().json;
+const rows = $('Load the record').first().json;
+const asked = $('Fan out judge').all().map((i) => i.json);
+
+const snap = {
+  technologies: rows.technologies.map((t) => ({ id: t.key, projects: t.projects || [] })),
+  capabilities: rows.capabilities.map((c) => ({ id: c.key, tier: c.tier, projects: c.projects || [], evidence: c.evidence || [] })),
+  projects: rows.projects.map((p) => ({ id: p.key, reviewStatus: p.reviewStatus, evidence: p.evidence || [] })),
+  evidence: rows.evidence.map((e) => ({ id: e.key, label: e.label })),
+};
+
+// Position is the alignment: an http node emits one item per input item, in order. See 'Guard rationales'.
+const replies = {};
+$input.all().forEach((item, position) => {
+  const stamped = item.json && item.json.__index;
+  const index = typeof stamped === 'number' ? stamped : position;
+  try {
+    replies[index] = JSON.parse(item.json.choices[0].message.content);
+  } catch (e) {
+    replies[index] = null;   // one bad reply costs one weighing, never the run
+  }
+});
+
+let demoted = 0;
+let weighedCount = 0;
+
+const results = scored.results.map((r, i) => {
+  const deterministic = {
+    status: r.status,
+    matchedTechnologies: r.matchedTechnologies,
+    matchedCapabilities: r.matchedCapabilities,
+    matchedProjects: r.matchedProjects,
+    evidence: r.evidence,
+    shortfall: r.shortfall,
+  };
+
+  const raw = replies[i];
+  if (!raw || (asked[i] && asked[i].skip)) {
+    return Object.assign({}, r, { weighed: false, strength: null });
+  }
+
+  // Bound the reply BEFORE it is read: unknown ids dropped, unbacked strengths clamped, a receipt the
+  // row does not carry rejected. applyJudgments in portable.ts holds all four guards.
+  const judgments = applyJudgments(raw, r.cited, snap, THRESHOLD_PROVEN);
+  if (judgments.length === 0) {
+    return Object.assign({}, r, { weighed: false, strength: null });
+  }
+
+  const strength = strengthOfJudgments(judgments);
+  const kept = pruneCandidates(r.cited, judgments);
+  const weighed = resolveRequirement(kept, r.best, snap, { thresholdProven: THRESHOLD_PROVEN, thresholdPartial: THRESHOLD_PARTIAL }, strength);
+
+  const final = worseOf(deterministic, weighed);
+  weighedCount += 1;
+  // Compare the STATUS, not the object: worseOf returns the weighed object on a tie for its narrower
+  // citations, so identity is true on almost every requirement and counting it read "16 of 16 lowered"
+  // on a run that lowered nothing.
+  if (final.status !== deterministic.status) demoted += 1;
+
+  return Object.assign({}, r, {
+    status: final.status,
+    shortfall: final.shortfall,
+    matchedTechnologies: final.matchedTechnologies,
+    matchedCapabilities: final.matchedCapabilities,
+    matchedProjects: final.matchedProjects,
+    evidence: final.evidence,
+    weighed: true,
+    strength: strength,
+  });
+});
+
+// Recomputed from the FINAL statuses, not carried over from the deterministic pass.
+const coverage = coverageOf(results.map((r) => ({ kind: r.requirement.kind, status: r.status })));
+
+return [{ json: {
+  title: scored.title,
+  company: scored.company,
+  requirements: scored.requirements,
+  results: results,
+  coverage: coverage,
+  retrieval: scored.retrieval,
+  retrievalDetail: scored.retrievalDetail,
+  weighing: { weighed: weighedCount, demoted: demoted, source: weighedCount > 0 ? 'model' : 'unweighed' },
+} }];`;
+}
+
+/**
+ * One item per requirement, each carrying the exact prompt that requirement's rationale is written from.
+ *
+ * This node exists because `Write rationales` used to be a SINGLE call: every requirement was stringified
+ * into one message, under a system prompt that says "you write one sentence" and a 160-token ceiling. The
+ * guard then read `$input.all()`, got one item, and indexed it per requirement — so requirement 1 received
+ * a sentence composed from all sixteen requirements' material, and requirements 2 through 16 read
+ * `undefined` and silently fell back to the template. The n8n lane was shipping fifteen template sentences
+ * and calling one of them a model rationale.
+ *
+ * An n8n HTTP node runs once per input item, so emitting N items here is what makes the fan-out real. The
+ * app calls `writeRationale` once per requirement for the same reason.
+ */
+function fanOutRationalesNode(): string {
+  return `// FAN OUT: one model call per requirement, exactly as src/pipeline/index.ts does.
+//
+// Reads 'Apply weighing', never 'Retrieve and score': the rationale must describe the verdict that was
+// actually written, and weighing can lower one. Writing prose from the pre-weighed citations is how the
+// app once produced a sentence about store certification under a requirement the model had scored 0.
+//
+// The request is assembled HERE rather than in the http node's jsonBody, because a jsonBody that does
+// not start with '=' is a fixed string and its nested {{ }} is never resolved. See buildParseRequest.
+const MODELS = ${JSON.stringify(RATIONALE_MODELS)};
+const SYSTEM = ${JSON.stringify(RATIONALE_SYSTEM)};
+const SCHEMA = ${JSON.stringify(RATIONALE_SCHEMA)};
+/* ── generated from src/pipeline/portable.ts — edit that file, then run \\\`pnpm n8n:build\\\` ──
+ *
+ * buildRationaleContext and templateRationale below are the app's own source, type-stripped. The prompt
+ * this node builds IS the corpus the guard checks the answer against, which is only true because one
+ * function builds both.
+ */
+${sharedRules()}
+/* ── end generated ── */
+
+const scored = $('Apply weighing').first().json;
+const rows = $('Load the record').first().json;
+
+const nameOf = (list, key) => {
+  const hit = list.find((x) => x.key === key);
+  return hit ? hit.name : key;
+};
+
+return scored.results.map((r, i) => {
+  const input = {
+    requirementText: r.requirement.text,
+    requirementKind: r.requirement.kind,
+    status: r.status,
+    technologies: r.matchedTechnologies.map((k) => nameOf(rows.technologies, k)),
+    capabilities: r.matchedCapabilities.map((k) => nameOf(rows.capabilities, k)),
+    projects: r.matchedProjects.map((k) => rows.projects.find((p) => p.key === k)).filter(Boolean),
+    evidence: r.evidence.map((k) => rows.evidence.find((e) => e.key === k)).filter(Boolean),
+    shortfall: r.shortfall || null,
+  };
+  const context = buildRationaleContext(input);
+  // __index travels with the item so the guard can realign if anything reorders or drops.
+  return { json: { __index: i, requirementId: r.requirementId, input: input, context: context, request: {
+    models: MODELS,
+    max_tokens: 160,
+    temperature: 0.2,
+    messages: [
+      { role: 'system', content: SYSTEM },
+      { role: 'user', content: context },
+    ],
+    response_format: { type: 'json_schema', json_schema: { name: 'rationale', strict: true, schema: SCHEMA } },
+    provider: { require_parameters: true },
+  } } };
+});`;
+}
+
 function guardNode(): string {
-  return `// THE FABRICATION GUARD.
+  return `const DEFAULT_CANDIDATE_ID = ${JSON.stringify(DEFAULT_CANDIDATE_ID)};
+// THE FABRICATION GUARD.
 //
 // Every number in a generated rationale must appear in the records that rationale was written from. A
 // sentence containing an unsourced figure is discarded whole and replaced by the deterministic template
@@ -976,48 +1653,49 @@ function guardNode(): string {
 //
 // Numbers are the tripwire for two reasons: they are where a small model reaches for a total or a
 // rounding, and they are the only claim in a fit report a reader will actually go and check.
-const scored = $('Retrieve and score').first().json;
+/* ── generated from src/pipeline/portable.ts — edit that file, then run \`pnpm n8n:build\` ──
+ *
+ * The guard below is the app's own source, type-stripped. It carried a hand-typed copy of the number
+ * check and no adjective ban whatsoever, so a live run's "extensive experience with Claude Code" would
+ * have been rejected by the app and written to Airtable by this workflow.
+ */
+${sharedRules()}
+/* ── end generated ── */
+
+const scored = $('Apply weighing').first().json;
 const rows = $('Load the record').first().json;
-const generated = $input.all().map((i) => {
-  try { return JSON.parse(i.json.choices[0].message.content).rationale; } catch (e) { return null; }
+const contexts = $('Fan out rationales').all().map((i) => i.json);
+
+// One model item per requirement. POSITION is the alignment: an HTTP node emits one item per input
+// item in order, and replaces the json with the response body, so the __index the fan-out stamped does
+// NOT survive the call. It is read when present anyway, because it costs one line and the failure it
+// guards against is undetectable — a sentence about the wrong requirement, printed under the right
+// heading, reads perfectly. alwaysOutputData keeps the count right when a call fails.
+const written = {};
+$input.all().forEach((item, position) => {
+  const stamped = item.json && item.json.__index;
+  const index = typeof stamped === 'number' ? stamped : position;
+  try {
+    written[index] = JSON.parse(item.json.choices[0].message.content).rationale;
+  } catch (e) {
+    // One malformed reply costs ONE template sentence, never the batch. The app degrades per
+    // requirement because it calls per requirement; this does the same.
+    written[index] = null;
+  }
 });
 
-const numbersIn = (s) => (String(s || '').match(/(?<![a-z0-9])\\d[\\d,]*(?![a-z])/gi) || []).map((n) => n.replace(/,$/, ''));
-
 const results = scored.results.map((r, i) => {
-  const receipts = r.evidence.map((id) => rows.evidence.find((e) => e.key === id)).filter(Boolean);
-  const projects = r.matchedProjects.map((id) => rows.projects.find((p) => p.key === id)).filter(Boolean);
-  const corpus = [
-    r.requirement.text,
-    r.shortfall || '',
-    projects.map((p) => p.name + ' ' + (p.status || '')).join(' '),
-    receipts.map((e) => e.label + ' ' + e.value).join(' '),
-  ].join('\\n');
+  // The corpus is the prompt, byte for byte — the same string the model was given, built once in the
+  // fan-out by the app's own buildRationaleContext. Two descriptions of "what the model saw" is how the
+  // guard came to reject true sentences.
+  const ctx = contexts[i] || {};
+  const corpus = ctx.context || '';
+  const template = templateRationale(ctx.input || {});
 
-  const where = projects.length
-    ? (projects.length === 1 ? projects[0].name : projects.slice(0, -1).map((p) => p.name).join(', ') + ' and ' + projects[projects.length - 1].name)
-    : 'the record';
-  const subject = (rows.technologies.find((t) => t.key === r.matchedTechnologies[0]) || {}).name
-    || (rows.capabilities.find((c) => c.key === r.matchedCapabilities[0]) || {}).name
-    || 'This';
-  const receiptText = receipts.length
-    ? receipts.length + ' linked receipt' + (receipts.length === 1 ? '' : 's')
-    : 'nothing verifiable linked';
-
-  const template = r.status === 'gap'
-    ? 'Nothing in the record matches this requirement.'
-    : r.status === 'proven'
-      ? subject + ' — shipped in ' + where + ', with ' + receiptText + '.'
-      : subject + ' appears in ' + where + ' with ' + receiptText + ', but ' + (r.shortfall || 'coverage is partial') + '.';
-
-  const written = generated[i];
-  const allowed = numbersIn(corpus);
-  const unsourced = written
-    ? numbersIn(written).some((n) => allowed.indexOf(n) === -1 && Number(n.replace(/,/g, '')) > 12)
-    : true;
-
-  const usable = written && written.length <= 400 && !unsourced;
-  return { ...r, rationale: usable ? written : template, rationaleSource: usable ? 'model' : 'template' };
+  const sentence = written[i];
+  const verdict = checkRationale(sentence, corpus);
+  const usable = verdict.usable;
+  return { ...r, rationale: usable ? sentence : template, rationaleSource: usable ? 'model' : 'template' };
 });
 
 // Everything that is not proven, required first. The Gaps section is the load-bearing claim: a scoring
@@ -1028,12 +1706,21 @@ const gaps = results.filter((r) => r.status !== 'proven').sort((a, b) => rank(a)
   return {
     requirement: r.requirement,
     status: r.status,
-    note: (r.shortfall || 'no match in the record').replace(/^./, (c) => c.toUpperCase()) + '.',
+    note: gapNote(r.shortfall, r.matchedProjects.map((k) => {
+      const p = rows.projects.find((x) => x.key === k);
+      return p ? p.name : k;
+    })),
     closestEvidence: closest ? { label: closest.label, value: closest.value, url: closest.url } : null,
   };
 });
 
-const key = 'role-' + String(scored.company || scored.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + new Date().toISOString().slice(0, 10);
+// Scoped to the candidate, via scopedKey generated above. A Roles row is a FIT REPORT — its Score and
+// Requirement Count describe one applicant — and this key carried no candidate at all, so two people
+// scored against the same posting on the same day landed on one row: Score last-writer-wins, both sets
+// of Results linked to it, the VIEWS.md rollups reading 32 against a Requirement Count of 16, and the
+// delivered recruiter link listing both under one name.
+const roleKey = 'role-' + String(scored.company || scored.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + new Date().toISOString().slice(0, 10);
+const key = scopedKey(rows.candidate.key, roleKey, DEFAULT_CANDIDATE_ID);
 
 // Everything the rest of the workflow needs, in one item. The next node narrows it to the Airtable
 // columns; nothing here is written directly, because autoMapInputData turns every top-level key into a
@@ -1043,20 +1730,30 @@ return [{ json: { key, results, gaps, coverage: scored.coverage } }];`;
 
 /** Narrow the guard's output to exactly the Roles columns, and nothing else. */
 function roleRowNode(): string {
-  return `const scored = $('Retrieve and score').first().json;
+  return `const scored = $('Apply weighing').first().json;
 const guarded = $('Guard rationales').first().json;
+const rows = $('Load the record').first().json;
 const now = new Date().toISOString();
 
 return [{
   json: {
     Key: guarded.key,
+    // Whose fit report this is, by record id. The key is candidate-scoped already, but the shared
+    // recruiter view filters on the Role link and reads the candidate off the ROW — so a row without
+    // this reads as belonging to nobody. The app's saveRole gained this and the workflow did not,
+    // which only showed up when a real run wrote a row with an empty Candidate cell.
+    Candidate: [rows.candidate.id],
     Title: scored.title,
     Company: scored.company,
     'Posted Text': String(($('Role received').first().json.body || {}).text || '').slice(0, 90000),
     Score: scored.coverage.score,
     'Requirement Count': scored.requirements.length,
     'Matched At': now,
-    Model: ${JSON.stringify(JD_MODELS[0])},
+    // The model that actually served the parse, or 'none' when code read the posting. This was a
+    // hardcoded JD_MODELS[0], so a fallthrough to the second model in the chain left no trace — the
+    // exact event the repo's "never a silent fallback" rule exists to expose. 'Posting requirements'
+    // reads it back off the response.
+    Model: $('Posting requirements').first().json.model,
     Source: 'n8n',
     'Ingested At': now,
   },
@@ -1066,29 +1763,35 @@ return [{
 /**
  * One Results row per requirement, citations written as links.
  *
- * Links are given as the target's primary-field value (Candidate.Name, Technology.Name, Capability.Name,
- * Project.Name, Evidence.Label, Role.Title) and the node runs with typecast, so Airtable resolves them
- * to record ids.
+ * Links are given as record ids — the rows 'Load the record' read for this candidate, plus the Roles row
+ * 'Write the role' just wrote. Giving them as primary-field values under typecast let Airtable resolve a
+ * citation by display name, which is not unique across candidates.
  * This is the payoff of the sixth table: the citations become traversable rows instead of slugs inside
  * a string, and the Gaps view becomes a filter rather than an impossibility.
  */
 function fanOutResultsNode(): string {
-  return `const scored = $('Retrieve and score').first().json;
+  return `const scored = $('Apply weighing').first().json;
 const rows = $('Load the record').first().json;
 const guarded = $('Guard rationales').first().json;
 const candidate = rows.candidate;
 const roleKey = guarded.key;
 const results = guarded.results || [];
 
-const nameOf = (table, key) => (rows[table].find((r) => r.key === key) || {}).name;
-const labelOf = (key) => (rows.evidence.find((e) => e.key === key) || {}).label;
+// Key → record id, from the rows 'Load the record' actually read for THIS candidate. A key that is not
+// in the scoped record resolves to nothing and the citation is dropped, which is the correct outcome:
+// this workflow cannot cite a row it was not allowed to see.
+const idOf = (table, key) => (rows[table].find((r) => r.key === key) || {}).id;
+// The Roles row 'Write the role' just wrote. Roles are shared across candidates and re-scoring a posting
+// on a later date leaves two rows with the same Title, so resolving this link by Title could attach new
+// results to a stale role.
+const roleRecId = $('Write the role').first().json.id;
 
 return results.map((r) => ({
   json: {
     // Results rows are candidate × role × requirement, so the candidate leads the Key — the exact
     // format src/store/airtable.ts writes, and what its reader strips back off.
     Key: candidate.key + '-' + roleKey + '-' + r.requirementId,
-    Candidate: [candidate.name],
+    Candidate: [candidate.id],
     Requirement: r.requirement.text,
     Kind: r.requirement.kind,
     Category: r.requirement.category,
@@ -1097,22 +1800,25 @@ return results.map((r) => ({
     'Match Score': r.score,
     Rationale: r.rationale,
     'Rationale Source': r.rationaleSource,
-    Role: [scored.title],
-    Technologies: r.matchedTechnologies.map((k) => nameOf('technologies', k)).filter(Boolean),
-    Capabilities: r.matchedCapabilities.map((k) => nameOf('capabilities', k)).filter(Boolean),
-    Projects: r.matchedProjects.map((k) => nameOf('projects', k)).filter(Boolean),
-    Evidence: r.evidence.map(labelOf).filter(Boolean),
+    Role: [roleRecId],
+    Technologies: r.matchedTechnologies.map((k) => idOf('technologies', k)).filter(Boolean),
+    Capabilities: r.matchedCapabilities.map((k) => idOf('capabilities', k)).filter(Boolean),
+    Projects: r.matchedProjects.map((k) => idOf('projects', k)).filter(Boolean),
+    Evidence: r.evidence.map((k) => idOf('evidence', k)).filter(Boolean),
   },
 }));`;
 }
 
 const matchWorkflow = (() => {
-  const loadTable = (name: string, table: string, position: Position) =>
-    airtable(name, position, {
+  /** Same shape and same reason as `loadAll` above: chained, and run exactly once. */
+  const loadTable = (name: string, table: string, position: Position) => ({
+    ...airtable(name, position, {
       operation: 'search',
       table: { __rl: true, mode: 'name', value: table },
       returnAll: true,
-    });
+    }),
+    executeOnce: true,
+  });
 
   const nodes: N8nNode[] = [
     sticky('Overview', [-640, -220], [520, 700],
@@ -1127,8 +1833,12 @@ const matchWorkflow = (() => {
       `every verdict and the coverage number in arithmetic. Only then is a model asked to describe each\n` +
       `outcome in one line, from the rows retrieval returned — it never sees the base, so it cannot cite\n` +
       `a project that did not match, and it cannot move a status it was told.\n\n` +
-      `\`Guard rationales\` discards any generated sentence containing a number that is not in the records\n` +
-      `it was written from, and falls back to the deterministic template for that row.\n\n` +
+      `\`Fan out rationales\` emits one item per requirement, so \`Write rationales\` runs once per\n` +
+      `requirement rather than once per posting. The prompt it builds IS the corpus the guard checks the\n` +
+      `answer against — one string, so the two can never describe different things.\n\n` +
+      `\`Guard rationales\` discards a sentence that states a number absent from the records it was written\n` +
+      `from, or that grades the candidate ("extensive", "strong", "deep"), and falls back to the\n` +
+      `deterministic template for that row alone. A failed call costs one sentence, not the run.\n\n` +
       `### Model tiering\n` +
       `- parse the posting: ${JD_MODELS[0]} (medium difficulty, short clean input)\n` +
       `- write rationales: ${RATIONALE_MODELS[0]} (easy — the facts are already chosen)\n` +
@@ -1141,60 +1851,69 @@ const matchWorkflow = (() => {
     unauthorizedRespond([640, 520]),
     sticky('Auth note', [140, 60], [480, 200], AUTH_STICKY),
 
-    http('Parse the posting', [640, 320], JSON.stringify({
-      models: JD_MODELS,
-      max_tokens: 1200,
-      temperature: 0,
-      messages: [
-        { role: 'system', content: JD_SYSTEM },
-        { role: 'user', content: '={{ $json.body.text }}' },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'role_parse', strict: true, schema: ROLE_PARSE_SCHEMA },
-      },
-      provider: { require_parameters: true },
-    })),
+    code('Read the posting', [640, 320], readPostingNode()),
+    ifNode('Needs a model?', [860, 320], '={{ $json.needsModel }}'),
+    // The model branch. It runs only for prose, and only when a key is set — otherwise the
+    // deterministic read is the answer, not a fallback after a wasted request.
+    code('Build parse request', [1080, 160], buildParseRequest()),
+    http('Parse the posting', [1300, 160], '={{ JSON.stringify($json.request) }}'),
+    code('Posting requirements', [1520, 320], postingRequirementsNode()),
 
-    loadTable('Load candidates', 'Candidates', [880, -20]),
-    loadTable('Load projects', 'Projects', [880, 120]),
-    loadTable('Load technologies', 'Technologies', [880, 260]),
-    loadTable('Load capabilities', 'Capabilities', [880, 400]),
-    loadTable('Load evidence', 'Evidence', [880, 540]),
+    loadTable('Load candidates', 'Candidates', [1740, -20]),
+    loadTable('Load projects', 'Projects', [1740, 120]),
+    loadTable('Load technologies', 'Technologies', [1740, 260]),
+    loadTable('Load capabilities', 'Capabilities', [1740, 400]),
+    loadTable('Load evidence', 'Evidence', [1740, 540]),
 
-    code('Load the record', [1120, 320], loadRecordNode()),
-    code('Retrieve and score', [1340, 320], retrieveAndScoreNode()),
+    code('Load the record', [1960, 320], loadRecordNode()),
 
-    http('Write rationales', [1560, 320], JSON.stringify({
-      models: RATIONALE_MODELS,
-      max_tokens: 160,
-      temperature: 0.2,
-      messages: [
-        { role: 'system', content: RATIONALE_SYSTEM },
-        { role: 'user', content: '={{ JSON.stringify($json.results) }}' },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'rationale', strict: true, schema: RATIONALE_SCHEMA },
-      },
-      provider: { require_parameters: true },
-    })),
+    // DENSE RETRIEVAL. Degrades: a failed or short embeddings response drops the run to lexical-only,
+    // which is a real degradation and a correct one — 'Collect vectors' reports it and the Respond node
+    // returns it, rather than the workflow quietly scoring a semantic match as a gap.
+    code('Build embed request', [2180, 320], buildEmbedRequestNode()),
+    http('Weigh similarity', [2400, 320], '={{ JSON.stringify($json.request) }}', true, EMBEDDINGS_ENDPOINT),
+    code('Collect vectors', [2620, 320], collectVectorsNode()),
 
-    code('Guard rationales', [1780, 320], guardNode()),
-    code('Build role row', [2000, 320], roleRowNode()),
-    upsert('Write the role', 'Roles', [2220, 320]),
+    code('Retrieve and score', [2840, 320], retrieveAndScoreNode()),
 
-    code('Fan out results', [2440, 420], fanOutResultsNode()),
-    upsert('Write results', 'Results', [2660, 420]),
+    // THE WEIGHING PASS (DESIGN.md v3.8). Every requirement is resolved twice — once with no model, once
+    // with the model's numbers — and the worse verdict wins. The workflow had no equivalent, so this
+    // guarantee held in the app lane only while both lanes wrote to the same Roles row.
+    code('Fan out judge', [3060, 320], fanOutJudgeNode()),
+    http('Weigh candidates', [3280, 320], '={{ JSON.stringify($json.request) }}', true),
+    code('Apply weighing', [3500, 320], applyWeighingNode()),
 
-    respond('Respond', [2440, 200],
+    code('Fan out rationales', [3720, 320], fanOutRationalesNode()),
+
+    // Runs once per item out of the fan-out — one requirement, one sentence, which is what
+    // RATIONALE_SYSTEM ("you write one sentence") and the 160-token ceiling were always written for.
+    http('Write rationales', [3940, 320], '={{ JSON.stringify($json.request) }}', true),
+
+    code('Guard rationales', [4160, 320], guardNode()),
+    code('Build role row', [4380, 320], roleRowNode()),
+    upsert('Write the role', 'Roles', [4600, 320]),
+
+    code('Fan out results', [4820, 420], fanOutResultsNode()),
+    upsert('Write results', 'Results', [5040, 420]),
+
+    // Below the results branch, for the same reason as the extract workflow's: under executionOrder v1
+    // the topmost branch runs first, and this used to answer with a coverage score before 'Write
+    // results' had written a single row. An Airtable failure then left a Roles row scored 75 with zero
+    // Results linked and a caller who had been told it worked.
+    respond('Respond', [4820, 620],
       `={{ {\n` +
       `  ok: true,\n` +
       `  role: $('Build role row').first().json.Title,\n` +
       `  company: $('Build role row').first().json.Company,\n` +
       `  candidate: $('Load the record').first().json.candidate.name,\n` +
       `  coverage: $('Guard rationales').first().json.coverage,\n` +
-      `  gaps: $('Guard rationales').first().json.gaps\n` +
+      `  gaps: $('Guard rationales').first().json.gaps,\n` +
+      // Named in the response because a degradation nobody can see is the one this repo bans. `retrieval`
+      // is hybrid or lexical depending on whether the embeddings call answered; `weighing` reports how
+      // many requirements were weighed and how many the model lowered.
+      `  retrieval: $('Apply weighing').first().json.retrieval,\n` +
+      `  retrievalDetail: $('Apply weighing').first().json.retrievalDetail,\n` +
+      `  weighing: $('Apply weighing').first().json.weighing\n` +
       `} }}`),
 
     sticky('Scoring note', [1300, 560], [500, 250],
@@ -1216,20 +1935,31 @@ const matchWorkflow = (() => {
     // The gate comes first, same as the extract workflow: 401 before any model call or Airtable read.
     ['Role received', 'Verify app token'],
     ['Verify app token', 'Token accepted?'],
-    ['Token accepted?', 'Parse the posting', 0],
+    ['Token accepted?', 'Read the posting', 0],
+    ['Read the posting', 'Needs a model?'],
+    // Prose goes to the model; everything else is already exact and skips it entirely. Both branches
+    // land on 'Posting requirements', so downstream reads ONE node name whichever ran.
+    ['Needs a model?', 'Build parse request', 0],
+    ['Build parse request', 'Parse the posting'],
+    ['Parse the posting', 'Posting requirements'],
+    ['Needs a model?', 'Posting requirements', 1],
     ['Token accepted?', 'Unauthorized', 1],
-    ['Parse the posting', 'Load candidates'],
-    ['Parse the posting', 'Load projects'],
-    ['Parse the posting', 'Load technologies'],
-    ['Parse the posting', 'Load capabilities'],
-    ['Parse the posting', 'Load evidence'],
-    ['Load candidates', 'Load the record'],
-    ['Load projects', 'Load the record'],
-    ['Load technologies', 'Load the record'],
-    ['Load capabilities', 'Load the record'],
+    // Chained, not fanned. See `loadAll` for why: a fan-in target runs before its other sources have.
+    ['Posting requirements', 'Load candidates'],
+    ['Load candidates', 'Load projects'],
+    ['Load projects', 'Load technologies'],
+    ['Load technologies', 'Load capabilities'],
+    ['Load capabilities', 'Load evidence'],
     ['Load evidence', 'Load the record'],
-    ['Load the record', 'Retrieve and score'],
-    ['Retrieve and score', 'Write rationales'],
+    ['Load the record', 'Build embed request'],
+    ['Build embed request', 'Weigh similarity'],
+    ['Weigh similarity', 'Collect vectors'],
+    ['Collect vectors', 'Retrieve and score'],
+    ['Retrieve and score', 'Fan out judge'],
+    ['Fan out judge', 'Weigh candidates'],
+    ['Weigh candidates', 'Apply weighing'],
+    ['Apply weighing', 'Fan out rationales'],
+    ['Fan out rationales', 'Write rationales'],
     ['Write rationales', 'Guard rationales'],
     ['Guard rationales', 'Build role row'],
     ['Build role row', 'Write the role'],

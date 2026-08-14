@@ -11,7 +11,6 @@
  */
 
 import type {
-  Capability,
   CoverageStatus,
   Evidence,
   Project,
@@ -20,18 +19,19 @@ import type {
   Snapshot,
 } from '../store/types';
 import type { Candidate } from './match';
+import {
+  coverageOf,
+  gapNote,
+  resolveRequirement,
+  worseOf as worseOfPortable,
+  type Resolution as PortableResolution,
+} from './portable';
 
 /** At or above this, a well-evidenced match counts as fully covered. */
 export const THRESHOLD_PROVEN = 0.7;
 /** Below this, nothing matched well enough to claim anything. */
 export const THRESHOLD_PARTIAL = 0.45;
 
-/** How many projects a single requirement may cite. See `resolve` for why this is capped. */
-const MAX_CITED_PROJECTS = 3;
-
-/** A required item is worth twice a preferred one. Preferred items still move the number. */
-const WEIGHT = { required: 1, preferred: 0.5 } as const;
-const VALUE: Record<CoverageStatus, number> = { proven: 1, partial: 0.5, gap: 0 };
 
 export interface ResolvedMatch {
   requirement: Requirement;
@@ -72,138 +72,24 @@ function byId<T extends { id: string }>(rows: readonly T[]): Map<string, T> {
  * buys you nothing until you also link something a stranger can check.
  */
 export function resolve(input: ResolvedMatch, snapshot: Snapshot): Resolution {
-  const techIndex = byId(snapshot.technologies);
-  const capIndex = byId(snapshot.capabilities);
-  const projectIndex = byId(snapshot.projects);
-
-  const matchedTechnologies = input.candidates.filter((c) => c.kind === 'technology').map((c) => c.id);
-  const matchedCapabilities = input.candidates.filter((c) => c.kind === 'capability').map((c) => c.id);
-
-  const caps = matchedCapabilities.map((id) => capIndex.get(id)).filter(Boolean) as Capability[];
-
-  /**
-   * Projects are derived, never matched directly — a project is relevant because something in it is.
-   *
-   * Ranked by how many of the matched rows each project actually contains, then cut to three. A common
-   * technology like React legitimately touches every project, and citing all of them produces a list of
-   * twenty-six receipts that nobody reads and nobody trusts. Three strongest is a citation; everything
-   * is a data dump.
-   */
-  const hits = new Map<string, number>();
-  const credit = (projectIds: readonly string[]): void => {
-    for (const id of projectIds) {
-      if (projectIndex.get(id)?.reviewStatus !== 'ok') continue; // parked records prove nothing yet
-      hits.set(id, (hits.get(id) ?? 0) + 1);
-    }
-  };
-  for (const id of matchedTechnologies) credit(techIndex.get(id)?.projects ?? []);
-  for (const cap of caps) credit(cap.projects);
-
-  const ranked = [...hits.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const matchedProjects = ranked.slice(0, MAX_CITED_PROJECTS).map(([id]) => id);
-
-  // Capability evidence is never trimmed: it is the most specific receipt available, and it is the one
-  // the evidence gate below is actually asking about.
-  const evidenceIds = new Set<string>();
-  for (const cap of caps) {
-    for (const e of cap.evidence) evidenceIds.add(e);
-  }
-  for (const id of matchedProjects) {
-    for (const e of projectIndex.get(id)?.evidence ?? []) evidenceIds.add(e);
-  }
-  const evidence = [...evidenceIds];
-
-  if (input.best < THRESHOLD_PARTIAL) {
-    return {
-      status: 'gap',
-      matchedTechnologies,
-      matchedCapabilities,
-      matchedProjects,
-      evidence,
-      shortfall: 'nothing in the record matches this closely enough to claim',
-    };
-  }
-
-  /**
-   * The gate reads the capability that actually matched, not all of them.
-   *
-   * This was `every` and it was wrong. A posting bullet that named a stretch capability alongside any
-   * incidentally-matched proven one was promoted to `proven` and then dropped out of the Gaps section
-   * entirely, which is the precise over-claim this file exists to prevent. `some` is wrong in the other
-   * direction: one incidental stretch row would drag down a requirement that is genuinely covered.
-   *
-   * So it reads the top-scoring capabilities, and any tie at that score counts. If the best match for a
-   * requirement is ambiguous between a proven row and a stretch row, the honest answer is partial.
-   */
-  const bestCapScore = Math.max(
-    0,
-    ...input.candidates.filter((c) => c.kind === 'capability').map((c) => c.score),
-  );
-  const decisive = input.candidates
-    .filter((c) => c.kind === 'capability' && c.score >= bestCapScore)
-    .map((c) => capIndex.get(c.id))
-    .filter(Boolean) as Capability[];
-
-  const belowProven = input.best < THRESHOLD_PROVEN;
-  const noEvidence = evidence.length === 0;
-  const allStretch = decisive.length > 0 && decisive.some((c) => c.tier === 'stretch');
-  const capsUnevidenced = decisive.length > 0 && decisive.some((c) => c.evidence.length === 0);
-  // One more condition on proven, never a route to it. See `strength` on ResolvedMatch.
-  const weighedThin = input.strength !== undefined && input.strength < THRESHOLD_PROVEN;
-
-  if (belowProven || noEvidence || allStretch || capsUnevidenced || weighedThin) {
-    const reason = belowProven
-      ? 'matched, but not closely enough to call it a direct hit'
-      : noEvidence
-        ? 'matched, but nothing verifiable is linked to it'
-        : allStretch
-          ? 'the matching capability is recorded as a stretch, not as shipped work'
-          : capsUnevidenced
-            ? 'the matching capability has no evidence linked, so it reads as unverified'
-            : 'the name matches, but the work behind it is thinner than the requirement asks for';
-    return {
-      status: 'partial',
-      matchedTechnologies,
-      matchedCapabilities,
-      matchedProjects,
-      evidence,
-      shortfall: reason,
-    };
-  }
-
-  return {
-    status: 'proven',
-    matchedTechnologies,
-    matchedCapabilities,
-    matchedProjects,
-    evidence,
-    shortfall: null,
-  };
+  // The arithmetic is `resolveRequirement` in ./portable.ts — the definition the n8n Code node is
+  // generated from. The workflow used to reimplement all of this by hand.
+  return resolveRequirement(
+    input.candidates,
+    input.best,
+    snapshot,
+    { thresholdProven: THRESHOLD_PROVEN, thresholdPartial: THRESHOLD_PARTIAL },
+    input.strength,
+  ) as Resolution;
 }
 
-/** proven beats partial beats gap. The only ordering the pipeline needs, in one place. */
-const RANK: Record<CoverageStatus, number> = { proven: 2, partial: 1, gap: 0 };
-
 /**
- * The guarantee, in one function.
- *
- * `matchRole` resolves every requirement twice — once with no model involved at all, once with the
- * weighing model's numbers — and keeps whichever came out worse. Everything ../pipeline/judge.ts claims
- * about what a model cannot do to this report reduces to this comparison. It holds for a reply that
- * rates every row 1.0, for a reply that names ids from another candidate's record, and for a reply
- * written by someone who wants a better score, because none of those can produce a status that beats an
- * answer the model was never consulted about.
- *
- * A TIE goes to the weighed side, and that is not a softening of the rule. Equal statuses mean the
- * weighing pass changed no verdict, so there is no promotion to guard against — and the weighed
- * resolution is the one carrying pruned citations, with the rows the model called coincidental
- * dropped. Handing back the deterministic object on a tie threw that away, which was measured to
- * matter: the Claude Code requirement kept citing Tendril's Microsoft Store certification through a
- * capability the model had scored relevance 0, and the rationale writer duly wrote a sentence about
- * store certification rounds. Citations only ever narrow here; the status is already decided above.
+ * Keep whichever resolution came out worse. The rule is `worseOf` in ./portable.ts; DESIGN.md §v3.8 has
+ * the reasoning, and CLAUDE.md lists it as a non-negotiable. It held in the app lane only until the
+ * workflow gained a weighing pass of its own.
  */
 export function worseOf(deterministic: Resolution, weighed: Resolution): Resolution {
-  return RANK[weighed.status] <= RANK[deterministic.status] ? weighed : deterministic;
+  return worseOfPortable(deterministic as PortableResolution, weighed as PortableResolution) as Resolution;
 }
 
 export interface Coverage {
@@ -225,31 +111,19 @@ export interface Coverage {
  */
 export function coverage(requirements: readonly Requirement[], results: readonly RequirementResult[]): Coverage {
   const status = new Map(results.map((r) => [r.requirementId, r.status]));
-  let earned = 0;
-  let possible = 0;
-  const tally: Record<CoverageStatus, number> = { proven: 0, partial: 0, gap: 0 };
-  let requiredCovered = 0;
-  let requiredTotal = 0;
-
-  for (const req of requirements) {
-    const s = status.get(req.id) ?? 'gap';
-    const w = WEIGHT[req.kind];
-    earned += w * VALUE[s];
-    possible += w;
-    tally[s] += 1;
-    if (req.kind === 'required') {
-      requiredTotal += 1;
-      if (s === 'proven') requiredCovered += 1;
-    }
-  }
+  // The arithmetic — the weights, the half-credit for partial — is `coverageOf` in ./portable.ts, the
+  // same definition the n8n Code node is generated from. A requirement nobody scored counts as a gap.
+  const totals = coverageOf(
+    requirements.map((req) => ({ kind: req.kind, status: status.get(req.id) ?? 'gap' })),
+  );
 
   return {
-    score: possible === 0 ? 0 : Math.round((earned / possible) * 100),
-    proven: tally.proven,
-    partial: tally.partial,
-    gap: tally.gap,
-    requiredCovered,
-    requiredTotal,
+    score: totals.score,
+    proven: totals.proven,
+    partial: totals.partial,
+    gap: totals.gap,
+    requiredCovered: totals.requiredCovered,
+    requiredTotal: totals.requiredTotal,
   };
 }
 
@@ -293,20 +167,16 @@ export function gaps(
       ? { label: closest.label, value: closest.value, url: closest.url }
       : null;
 
-    const shortfall = resolution?.shortfall ?? 'no match in the record';
-    const where =
-      result.matchedProjects.length > 0
-        ? ` Closest on file: ${result.matchedProjects
-            .map((id) => projectIndex.get(id)?.name ?? id)
-            .slice(0, 2)
-            .join(' and ')}.`
-        : '';
-
     out.push({
       requirement,
       status: result.status,
       closestEvidence,
-      note: `${shortfall[0]?.toUpperCase() ?? ''}${shortfall.slice(1)}.${where}`,
+      // The sentence is `gapNote` in ./portable.ts — the same definition the n8n Code node is
+      // generated from, which until now wrote a shorter note than this lane did.
+      note: gapNote(
+        resolution?.shortfall ?? null,
+        result.matchedProjects.map((id) => projectIndex.get(id)?.name ?? id),
+      ),
     });
   }
 

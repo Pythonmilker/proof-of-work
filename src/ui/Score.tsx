@@ -155,7 +155,12 @@ export function Score({
             ) : (
               <>
                 {snapshot.roles.map((r) => {
-                  const owner = r.results[0]?.candidate ?? null;
+                  // The row's own candidate, not whichever Results row happened to sort first. Reading
+                  // results[0] was wrong on exactly the case the shelf exists for: two applicants
+                  // scored against one posting, where `score` belonged to whoever ran last while
+                  // results[0] came from whoever the store ordered first — so it rendered "31% for
+                  // Joel" when 31 was someone else's coverage.
+                  const owner = r.candidate ?? null;
                   return (
                     <button
                       key={r.id}

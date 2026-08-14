@@ -95,31 +95,9 @@ export async function embed(
 }
 
 /** Cosine similarity. Returns 0 for mismatched or empty vectors rather than NaN. */
-export function cosine(a: Vector, b: Vector): number {
-  if (a.length === 0 || a.length !== b.length) return 0;
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    const av = a[i] as number;
-    const bv = b[i] as number;
-    dot += av * bv;
-    na += av * av;
-    nb += bv * bv;
-  }
-  if (na === 0 || nb === 0) return 0;
-  return dot / (Math.sqrt(na) * Math.sqrt(nb));
-}
-
-/**
- * Cosine over real text sits in a narrow band — unrelated strings rarely score below about 0.3, and a
- * good hit is rarely above 0.85. Stretching that band to 0..1 keeps the threshold in score.ts readable
- * as a percentage instead of a magic number that only makes sense to whoever tuned it.
+/*
+ * The maths is `cosine`, `normalizeCosine` and `denseScore` in ../pipeline/portable.ts — the definitions
+ * the n8n Code nodes are generated from. This file keeps the transport, which is the part that cannot be
+ * shared: one lane holds a key, the other holds an n8n credential.
  */
-export const COSINE_FLOOR = 0.3;
-export const COSINE_CEILING = 0.85;
-
-export function normalizeCosine(raw: number): number {
-  const clamped = Math.min(COSINE_CEILING, Math.max(COSINE_FLOOR, raw));
-  return (clamped - COSINE_FLOOR) / (COSINE_CEILING - COSINE_FLOOR);
-}
+export { cosine, normalizeCosine } from '../pipeline/portable';

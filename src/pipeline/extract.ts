@@ -16,7 +16,7 @@
 import { callJson, shortReason, type LlmOptions, type LlmResult } from '../openrouter/client';
 import { PROJECT_EXTRACTION_SCHEMA } from '../openrouter/schemas';
 import type { Snapshot } from '../store/types';
-import { containsTerm, normalize } from './text';
+import { containsTerm, normalize } from './portable';
 import type { ExtractedProject } from './validate';
 
 export const EXTRACTION_SYSTEM = `You read one raw artifact from a software project and record what it

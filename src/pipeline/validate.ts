@@ -19,6 +19,7 @@
  */
 
 import { DEFAULT_CANDIDATE_ID, type Project, type ProjectStatus, type ReviewStatus } from '../store/types';
+import { scopedKey } from './portable';
 
 export interface ExtractedProject {
   name: string;
@@ -243,12 +244,17 @@ export function toReviewStub(
   sourceName: string,
   problems: string[],
   provenance: { source: string; ingestedAt: string },
+  candidateId: string = DEFAULT_CANDIDATE_ID,
 ): Project {
   const label = `Unparsed: ${sourceName}`;
   const reviewStatus: ReviewStatus = 'needs-review';
   return {
-    id: slugify(label),
-    candidate: DEFAULT_CANDIDATE_ID,
+    // Scoped, like every other project key. `sourceName` defaults to 'pasted-input' at every entry
+    // point, so an unscoped stub meant two applicants' failed ingests collided on one row: A's parked
+    // record ceased to exist and reappeared inside B's, after A was told it was parked. The success
+    // path has always been scoped; only the error path was not.
+    id: scopedKey(candidateId, slugify(label), DEFAULT_CANDIDATE_ID),
+    candidate: candidateId,
     name: label,
     slug: slugify(label),
     role: '',

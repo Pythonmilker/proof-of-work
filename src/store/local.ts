@@ -146,12 +146,14 @@ export class LocalStore implements Store {
   }
 
   /**
-   * A Role is global; its Results are per-candidate.
+   * A Role is one candidate's fit report, and its key says so.
    *
-   * Replacing the row wholesale used to drop every other applicant's results for that posting, so
-   * scoring a second applicant against the same posting on the same day silently erased the first
-   * one — the exact thing v3 exists to do. Airtable never had the bug because it upserts Results by
-   * key. Here the incoming candidate's rows replace only their own; everyone else's survive.
+   * That was not always true. The key was `role-<slug>-<date>` with no candidate in it, so two
+   * applicants scored against the same posting on the same day landed on ONE row — and replacing it
+   * wholesale dropped the other applicant's results entirely. The merge below was the fix for that,
+   * and it is kept as a floor rather than removed: rows written before the key was scoped can still
+   * carry more than one candidate's results, and a store that silently dropped them on the next score
+   * would reintroduce the bug on exactly the data that already suffered from it.
    */
   async saveRole(role: Role): Promise<void> {
     const existing = this.snapshot.roles.find((r) => r.id === role.id);
@@ -213,9 +215,16 @@ export class LocalStore implements Store {
       evidence: snapshot.evidence
         .filter((e) => !gone.has(e.id))
         .map((e) => ({ ...e, projects: keep(e.projects) })),
-      // The Role row and its requirements stay — a posting is scoreable by anyone. Only this
-      // candidate's Results rows go.
-      roles: snapshot.roles.map((role) => ({
+      // This candidate's OWN fit reports go with them; anyone else's stay. A Roles row used to be a
+      // posting everyone shared, which is why its key carried no candidate — and why two applicants
+      // scored against one posting on one day collided on a single row. The key is scoped now, so a
+      // row belongs to exactly one person.
+      //
+      // The Results filter below is kept even so: a row written before the key was scoped can still
+      // hold another candidate's results, and dropping that scrub would resurrect the bug on old data.
+      roles: snapshot.roles
+        .filter((role) => role.candidate !== candidateId)
+        .map((role) => ({
         ...role,
         results: role.results
           .filter((r) => r.candidate !== candidateId)

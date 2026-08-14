@@ -171,19 +171,19 @@ the fit report ↗"). Live mode never shows two fit reports.
   product the hiring team owns.
 - Stale text: `Records.tsx` still says "five tables".
 
-## 8. Build plan
+## 8. Build order
 
-| # | Who | Effort | What |
-|---|---|---|---|
-| 1 | claude | done in v2 commit | This design; README stale-paragraph fix |
-| 2 | claude | ~30 min | Seed helper: write the `Fit report — Arootah` view spec + exact formulas into `airtable/VIEWS.md` / `INTERFACE.md` (v2 rewrite of both) |
-| 3 | joel | ~10 min | Click-build the 5 formula/rollup fields from the spec |
-| 4 | joel | ~15 min | Build the shared view, hide fields, create the share link, **test it incognito** |
-| 5 | claude | ~2–3 h | React contract: endpoint split, honest n8n probe, live-mode gating, LiveRunResult card, unresolved notice, text fixes |
-| 6 | joel | ~60–90 min | Interface pages "Fit report" + "Pipeline" from the click-script |
-| 7 | claude | ~1 h | Re-shoot app screenshots; rewrite README/WRITEUP so Airtable leads; reconcile counts |
-| 8 | joel | ~30 min | Three SaaS screenshots (n8n canvas, base with Tendril expanded, Interface page) |
-| 9 | both | — | Re-verify sharing plan-gates the day of submission; film the 75s take |
+The sequence, because the dependencies are real rather than a preference. Nothing after step 2 can be
+done until the base exists, and the two Airtable surfaces have to be built by hand because Airtable has
+no API for views or Interface pages.
+
+1. This design, written before the code.
+2. The view and Interface specs, with exact formulas, into `airtable/VIEWS.md` and `airtable/INTERFACE.md`.
+3. The five formula and rollup fields, click-built from that spec.
+4. The shared view: hide fields, create the share link, verify it logged out.
+5. The React contract: endpoint split, the n8n probe, live-mode gating.
+6. The Interface pages, from the click-script.
+7. README and write-up rewritten so Airtable leads; every count reconciled against the code.
 
 ## 9. Risks and open questions
 
@@ -229,7 +229,7 @@ Anything that does not serve that moment is cut.
 
 ### Why it exists
 
-It targets a role requiring React, Airtable as an
+It is an application asset for an AI Product Engineer role that requires React, Airtable as an
 application backend, n8n and/or Zapier, and LLM integration. Three of those four are absent from the
 candidate's record. Rather than claim them, the demo produces them — and then reports honestly that
 this project is the only evidence for them. A system that tells the truth about its own subject is the
@@ -846,9 +846,9 @@ n8n already holds the trigger, the branching and the code nodes, so the Zap woul
 slide. A demo that ships a tool it does not need is making a claim about breadth that the architecture
 then contradicts, and a reader who opens the workflow can see there was nothing for it to do.
 
-So there is no notification step at all. `src/store/seed.ts` says so in the record: the Zapier row was
-removed from the technology list, and a posting asking for "n8n and/or Zapier" is answered by n8n on its
-own. A posting asking for Zapier specifically comes out a gap, which is correct.
+So there is no notification step at all. `src/store/seed.ts` says so out loud in the record: the Zapier
+row was removed from the technology list, and a posting asking for "n8n and/or Zapier" is answered by
+n8n on its own. A posting asking for Zapier specifically comes out a gap, which is correct.
 
 ---
 
@@ -1115,7 +1115,7 @@ programmatically and driving the agentic CLI are different skills, and the alias
 one for the other.
 
 So the first thing weighing did on a real posting was catch an over-claim in Joel's own record, of a
-kind the arithmetic could not see, in a row the working notes had recorded as a win. That is the feature
+kind the arithmetic could not see, in a row previously recorded as a win. That is the feature
 working.
 
 ### Resolved the same day

@@ -33,6 +33,15 @@ import { JUDGMENT_SCHEMA } from '../openrouter/schemas';
 import type { Capability, Requirement, Snapshot, Technology } from '../store/types';
 import type { Candidate } from './match';
 import { THRESHOLD_PROVEN } from './score';
+import {
+  applyJudgments,
+  pruneCandidates,
+  strengthOfJudgments,
+  RELEVANCE_FLOOR,
+} from './portable';
+
+/** Below this relevance a row is coincidental. Defined in ./portable.ts so both lanes share it. */
+export { RELEVANCE_FLOOR };
 
 /**
  * The ceiling a row is held to when its receipts do not support a direct hit.
@@ -43,8 +52,6 @@ import { THRESHOLD_PROVEN } from './score';
  */
 export const UNPROVEN_CEILING = THRESHOLD_PROVEN - 0.01;
 
-/** Below this the model is saying the row only matched by coincidence of wording. */
-export const RELEVANCE_FLOOR = 0.35;
 
 export interface Judgment {
   id: string;
@@ -181,96 +188,19 @@ export function buildJudgeInput(input: JudgeInput): string {
  * the line no matter how the model scored it — which is the same rule `resolve` enforces, applied one
  * step earlier so the number the resolver reads is already honest.
  */
-function backed(kind: Candidate['kind'], id: string, snapshot: Snapshot): boolean {
-  if (kind === 'capability') {
-    const cap = snapshot.capabilities.find((c) => c.id === id);
-    if (!cap) return false;
-    return cap.tier !== 'stretch' && cap.evidence.length > 0;
-  }
-  const tech = snapshot.technologies.find((t) => t.id === id);
-  if (!tech) return false;
-  // A technology carries no receipts of its own; it borrows the standing of the projects it was used in.
-  return tech.projects.some((pid) => {
-    const project = snapshot.projects.find((p) => p.id === pid);
-    return project?.reviewStatus === 'ok' && project.evidence.length > 0;
-  });
-}
-
-/** Evidence labels a row may legitimately cite, lowercased for comparison. */
-function receiptLabels(kind: Candidate['kind'], id: string, snapshot: Snapshot): Set<string> {
-  const out = new Set<string>();
-  if (kind !== 'capability') return out;
-  const cap = snapshot.capabilities.find((c) => c.id === id);
-  for (const eid of cap?.evidence ?? []) {
-    const e = snapshot.evidence.find((row) => row.id === eid);
-    if (e) out.add(e.label.trim().toLowerCase());
-  }
-  return out;
-}
-
-function clamp01(value: unknown): number {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n)) return 0;
-  return Math.min(1, Math.max(0, n));
-}
-
-/**
- * Take the model's reply and make it safe to read.
- *
- * Exported and tested directly, because every guarantee this file makes is enforced here rather than in
- * the prompt. The tests hand it deliberately hostile replies — unknown ids, 1.0 on a receiptless claim,
- * a fabricated receipt label — and assert that none of them reach the resolver.
+/*
+ * The guards are `applyJudgments`, `judgeBacked`, `judgeReceiptLabels`, `strengthOfJudgments` and
+ * `pruneCandidates` in ./portable.ts — the definitions the n8n Code nodes are generated from. They
+ * lived here, and the workflow had no weighing pass at all, so nothing enforced them on that lane.
+ * The wrappers below keep this file's Map-based signatures, which the app and its tests already use.
  */
 export function applyJudgment(
   raw: unknown,
   candidates: readonly Candidate[],
   snapshot: Snapshot,
 ): Map<string, Judgment> {
-  const sent = new Map(candidates.map((c) => [c.id, c]));
-  const out = new Map<string, Judgment>();
-
-  const rows = Array.isArray((raw as { judgments?: unknown })?.judgments)
-    ? ((raw as { judgments: unknown[] }).judgments as Record<string, unknown>[])
-    : [];
-
-  for (const row of rows) {
-    const id = typeof row?.id === 'string' ? row.id : '';
-    const candidate = sent.get(id);
-    if (!candidate) continue; // not a row we sent, so not a row that exists as far as this pass is concerned
-    if (out.has(id)) continue; // first answer wins; a second is the model arguing with itself
-
-    const relevance = clamp01(row.relevance);
-    let strength = clamp01(row.strength);
-    const receipt = typeof row.receipt === 'string' ? row.receipt.trim() : '';
-    const reason = typeof row.reason === 'string' ? row.reason.trim().slice(0, 200) : '';
-    let clamped: string | null = null;
-
-    // Gate on the proven threshold the prompt names, not UNPROVEN_CEILING. The model is told to
-    // "score it 0.7 or below and leave receipt empty" for unbacked strengths, so a receipt is only
-    // required ABOVE 0.7. Firing at > UNPROVEN_CEILING (0.69) clamped an as-instructed 0.7/empty-receipt
-    // row down to 0.69, which weighedThin (< 0.7) then demoted — eroding the score for following the
-    // instructions. The clamp TARGET stays UNPROVEN_CEILING so a genuine over-claim still lands thin.
-    if (strength > THRESHOLD_PROVEN) {
-      if (!backed(candidate.kind, id, snapshot)) {
-        strength = UNPROVEN_CEILING;
-        clamped = 'held below a direct hit: nothing verifiable is linked to this row';
-      } else if (candidate.kind === 'capability') {
-        // The named-receipt guard. Technologies carry no labels of their own, so the check applies to
-        // capabilities, which are the rows that can actually over-claim.
-        const labels = receiptLabels(candidate.kind, id, snapshot);
-        if (!receipt || !labels.has(receipt.toLowerCase())) {
-          strength = UNPROVEN_CEILING;
-          clamped = receipt
-            ? `held below a direct hit: cited a receipt that is not linked to this row ("${receipt}")`
-            : 'held below a direct hit: no receipt was named to support it';
-        }
-      }
-    }
-
-    out.set(id, { id, relevance, strength, receipt, reason, clamped });
-  }
-
-  return out;
+  const judged = applyJudgments(raw, candidates, snapshot, THRESHOLD_PROVEN);
+  return new Map(judged.map((j) => [j.id, j]));
 }
 
 /** Ask the model, then bound the answer. A failed call is not an error — it is an unweighed report. */
@@ -303,33 +233,15 @@ export async function weighCandidates(
   return { judgments, strength: strengthOf(judgments), source: 'model' };
 }
 
-/**
- * The requirement's weighed strength: the best clamped strength among rows the model kept.
- *
- * Best rather than average, because a requirement is covered by the strongest thing that covers it. A
- * candidate with one excellent receipt and three incidental mentions has covered it; averaging would
- * punish them for the record being thorough.
- */
+/** The best clamped strength among rows the model kept. `strengthOfJudgments` in ./portable.ts. */
 export function strengthOf(judgments: ReadonlyMap<string, Judgment>): number {
-  let best = 0;
-  for (const j of judgments.values()) {
-    if (j.relevance < RELEVANCE_FLOOR) continue;
-    if (j.strength > best) best = j.strength;
-  }
-  return best;
+  return strengthOfJudgments([...judgments.values()]);
 }
 
-/** Rows the model called coincidental. Dropped from citations; never used to raise a verdict. */
+/** Rows the model called coincidental. `pruneCandidates` in ./portable.ts. */
 export function prune(
   candidates: readonly Candidate[],
   judgments: ReadonlyMap<string, Judgment>,
 ): Candidate[] {
-  if (judgments.size === 0) return [...candidates];
-  const kept = candidates.filter((c) => {
-    const j = judgments.get(c.id);
-    return !j || j.relevance >= RELEVANCE_FLOOR;
-  });
-  // Never prune to nothing: an empty citation list turns a real match into "no match in the record",
-  // which reads as a gap the record does not actually have.
-  return kept.length > 0 ? kept : [...candidates];
+  return pruneCandidates(candidates, [...judgments.values()]);
 }

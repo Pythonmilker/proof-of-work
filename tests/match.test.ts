@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { containsTerm, normalize, numbersIn, overlap, stem, tokens } from '@/pipeline/text';
+import { containsTerm, normalize, numbersIn, overlap, stem, tokens } from '@/pipeline/portable';
 import { match, topCandidates } from '@/pipeline/match';
 import { seedSnapshot } from '@/store/seed';
 import type { Requirement } from '@/store/types';

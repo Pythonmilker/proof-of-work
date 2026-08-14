@@ -12,9 +12,16 @@
  * reach. Running both and taking the better score gets each one's strength without either one's blind spot.
  */
 
-import { cosine, normalizeCosine, type Vector } from '../openrouter/embeddings';
+import { type Vector } from '../openrouter/embeddings';
 import type { Capability, Requirement, Snapshot, Technology } from '../store/types';
-import { containsTerm, normalize, overlap } from './text';
+import {
+  lexicalCapabilityScore,
+  lexicalTechnologyScore,
+  normalize,
+  topCited,
+  denseScore,
+  embedTextForRow,
+} from './portable';
 
 export type MatchVia = 'lexical' | 'dense' | 'both';
 
@@ -42,43 +49,23 @@ export interface MatchOutput {
   modes: MatchVia[];
 }
 
-/**
- * A dense-only hit is never allowed to outrank an exact name hit.
- *
- * Without this, a requirement saying "React" can score a semantically-adjacent capability above the
- * React technology row, and the citation then points somewhere confusing. The penalty is small because
- * dense retrieval is doing real work — it just does not get to win ties against a literal name.
- */
-const DENSE_CEILING = 0.95;
 
 /** Text an entity is embedded as. Name plus its own words — never a project's words, which would leak. */
+/** The string a row is embedded as. The rule is `embedTextForRow` in ./portable.ts. */
 export function embedTextFor(entity: Technology | Capability): string {
-  if ('aliases' in entity) {
-    return [entity.name, ...entity.aliases].join(', ');
-  }
-  return [entity.name, entity.statement, ...entity.matchTerms].join('. ');
+  return embedTextForRow(entity);
 }
 
 export function vectorKey(kind: 'technology' | 'capability', id: string): string {
   return `${kind}:${id}`;
 }
 
-function lexicalScoreForTechnology(haystack: string, tech: Technology): number {
-  for (const alias of [tech.name, ...tech.aliases]) {
-    if (containsTerm(haystack, alias)) return 1;
-  }
-  return 0;
-}
-
-function lexicalScoreForCapability(requirementText: string, haystack: string, cap: Capability): number {
-  for (const term of [cap.name, ...cap.matchTerms]) {
-    if (containsTerm(haystack, term)) return 1;
-  }
-  // No literal hit. Fall back to token overlap against the capability's own statement, which is what
-  // catches a JD that describes the capability instead of naming it.
-  const phrase = Math.max(overlap(requirementText, cap.name), overlap(requirementText, cap.statement));
-  return phrase >= 0.5 ? 0.6 + (phrase - 0.5) * 0.6 : 0;
-}
+/*
+ * The two lexical scorers are `lexicalTechnologyScore` and `lexicalCapabilityScore` in ./portable.ts,
+ * alongside the citation trim — the definitions the n8n Code nodes are generated from. They lived here
+ * until the workflow was found scoring prose postings lower than the app on identical data, having never
+ * carried the capability fallback at all.
+ */
 
 export function match(input: MatchInput): MatchOutput {
   const { requirement, snapshot, vectors, requirementVector } = input;
@@ -94,28 +81,28 @@ export function match(input: MatchInput): MatchOutput {
     name: string,
     lexical: number,
   ): void => {
-    let denseScore = 0;
+    let dense_ = 0;
     if (dense) {
       const vec = vectors?.get(vectorKey(kind, id));
       if (vec && vec.length > 0) {
-        denseScore = normalizeCosine(cosine(requirementVector as Vector, vec)) * DENSE_CEILING;
+        dense_ = denseScore(requirementVector as Vector, vec);
       }
     }
 
-    const score = Math.max(lexical, denseScore);
+    const score = Math.max(lexical, dense_);
     if (score <= 0) return;
 
     const via: MatchVia =
-      lexical > 0 && denseScore > 0 ? 'both' : lexical > 0 ? 'lexical' : 'dense';
+      lexical > 0 && dense_ > 0 ? 'both' : lexical > 0 ? 'lexical' : 'dense';
     modes.add(via === 'both' ? 'both' : via);
     candidates.push({ kind, id, name, score, via });
   };
 
   for (const tech of snapshot.technologies) {
-    consider('technology', tech.id, tech.name, lexicalScoreForTechnology(haystack, tech));
+    consider('technology', tech.id, tech.name, lexicalTechnologyScore(haystack, tech));
   }
   for (const cap of snapshot.capabilities) {
-    consider('capability', cap.id, cap.name, lexicalScoreForCapability(requirement.text, haystack, cap));
+    consider('capability', cap.id, cap.name, lexicalCapabilityScore(requirement.text, haystack, cap));
   }
 
   candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
@@ -127,18 +114,7 @@ export function match(input: MatchInput): MatchOutput {
   };
 }
 
-/**
- * Keep the winners and drop the long tail.
- *
- * A requirement that matches eleven things has not really matched eleven things — it has matched two,
- * and nine rows scored above zero because they share a word. Anything more than `DELTA` below the best
- * score is noise in the citation list, and a citation list nobody trusts is worse than a short one.
- */
-const DELTA = 0.2;
-const MAX_CITED = 4;
-
+/** Keep the winners, drop the long tail. The rule is `topCited` in ./portable.ts. */
 export function topCandidates(out: MatchOutput): Candidate[] {
-  if (out.candidates.length === 0) return [];
-  const floor = out.best - DELTA;
-  return out.candidates.filter((c) => c.score >= floor).slice(0, MAX_CITED);
+  return topCited(out.candidates);
 }

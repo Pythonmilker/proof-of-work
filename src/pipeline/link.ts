@@ -7,7 +7,7 @@
  */
 
 import { DEFAULT_CANDIDATE_ID, type Capability, type Project, type Snapshot, type Technology } from '../store/types';
-import { containsTerm, normalize, overlap } from './text';
+import { duplicateProjectOf, matchCapabilityRow, matchTechnologyRow, normalize } from './portable';
 import { slugify } from './validate';
 
 export interface LinkOutcome<T> {
@@ -28,19 +28,10 @@ export interface LinkOutcome<T> {
 function findTechnology(technologies: readonly Technology[], raw: string): Technology | undefined {
   const needle = normalize(raw);
   if (!needle) return undefined;
-
-  for (const tech of technologies) {
-    for (const alias of [tech.name, ...tech.aliases]) {
-      const a = normalize(alias);
-      if (a === needle) return tech;
-    }
-  }
-  for (const tech of technologies) {
-    for (const alias of [tech.name, ...tech.aliases]) {
-      if (containsTerm(needle, alias)) return tech;
-    }
-  }
-  return undefined;
+  // The rule is `matchTechnologyRow` in ./portable.ts — the definition the n8n Code node is generated
+  // from. That node matched by exact equality only, so half of what the extraction prompt asks for
+  // resolved here and went unresolved there.
+  return matchTechnologyRow(raw, technologies);
 }
 
 /**
@@ -87,21 +78,9 @@ function findCapability(capabilities: readonly Capability[], raw: string): Capab
   const needle = normalize(raw);
   if (!needle) return undefined;
 
-  for (const cap of capabilities) {
-    for (const term of [cap.name, ...cap.matchTerms]) {
-      if (normalize(term) === needle) return cap;
-    }
-  }
-
-  let best: { cap: Capability; score: number } | undefined;
-  for (const cap of capabilities) {
-    const score = Math.max(
-      overlap(raw, cap.name),
-      ...cap.matchTerms.map((t) => overlap(raw, t)),
-    );
-    if (score >= 0.6 && (!best || score > best.score)) best = { cap, score };
-  }
-  return best?.cap;
+  // The rule is `matchCapabilityRow` in ./portable.ts, generated into the extract workflow's
+  // 'Resolve taxonomy' node, which previously ran neither the overlap pass nor anything but equality.
+  return matchCapabilityRow(raw, capabilities);
 }
 
 /**
@@ -172,18 +151,9 @@ export interface DuplicateVerdict {
  * failure that makes a capability look unverified when it is not.
  */
 export function findDuplicate(snapshot: Snapshot, candidateName: string): DuplicateVerdict {
-  const slug = slugify(candidateName);
-
-  for (const project of snapshot.projects) {
-    if (project.slug === slug) return { duplicate: project, reason: 'same slug' };
-  }
-  for (const project of snapshot.projects) {
-    if (project.reviewStatus !== 'ok') continue;
-    if (overlap(candidateName, project.name) >= 0.8) {
-      return { duplicate: project, reason: `name overlaps "${project.name}"` };
-    }
-  }
-  return { duplicate: null, reason: null };
+  // The rule is `duplicateProjectOf` in ./portable.ts. The n8n lane carried only the slug arm, so
+  // "Tendril — agent-first IDE" merged here and created a second row there.
+  return duplicateProjectOf(snapshot.projects, candidateName) as DuplicateVerdict;
 }
 
 /** Merge a fresh extraction into a row we already had, preferring newly-supplied concrete values. */

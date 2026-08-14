@@ -144,7 +144,7 @@ describe('LocalStore.deleteCandidate', () => {
     expect(deletionCounts(after, janeId)).toEqual({ projects: 0, claims: 0, evidence: 0, results: 0 });
   });
 
-  it('leaves Technologies and Roles standing, minus the links that pointed at deleted rows', async () => {
+  it('leaves Technologies standing and takes only the deleted candidate’s fit reports', async () => {
     const { store, janeId, sharedRole } = await twoApplicants();
     const before = await store.read();
     const janeProjects = before.projects.filter((p) => p.candidate === janeId).map((p) => p.id);
@@ -162,15 +162,25 @@ describe('LocalStore.deleteCandidate', () => {
       reactBefore?.projects.filter((id) => !janeProjects.includes(id)),
     );
 
-    // Roles are global: both rows stay, with their requirements, and only her Results rows go.
-    expect(after.roles.map((r) => r.id)).toEqual(before.roles.map((r) => r.id));
+    // A Roles row is one candidate's FIT REPORT, and since the key became candidate-scoped it belongs
+    // to exactly one person. Jane's own row goes with her; the seed candidate's stays.
+    const janeRoles = before.roles.filter((r) => r.candidate === janeId).map((r) => r.id);
+    expect(janeRoles.length, 'the fixture should have given Jane a role of her own').toBeGreaterThan(0);
+    expect(after.roles.map((r) => r.id)).toEqual(
+      before.roles.filter((r) => !janeRoles.includes(r.id)).map((r) => r.id),
+    );
+
     for (const role of after.roles) {
       const was = before.roles.find((r) => r.id === role.id);
       expect(role.requirements).toEqual(was?.requirements);
       expect(role.results.every((r) => r.candidate !== janeId)).toBe(true);
     }
 
+    // The legacy shape still has to be scrubbed. `sharedRole` is deliberately built carrying BOTH
+    // candidates' results — what the base produced before the key was scoped — and a delete has to
+    // filter those rather than assume one row means one candidate.
     const shared = after.roles.find((r) => r.id === sharedRole);
+    expect(shared, 'the seed candidate keeps their own report').toBeDefined();
     expect(shared?.results).toHaveLength(16); // the seed candidate's half, untouched
     expect(shared?.results.every((r) => r.candidate === DEFAULT_CANDIDATE_ID)).toBe(true);
   });
@@ -255,7 +265,13 @@ function fakeBase(): Record<string, FakeRecord[]> {
     ],
     Capabilities: [{ id: 'recJaneCap', fields: { Key: 'cap-jane-1', Candidate: ['recJane'] } }],
     Evidence: [{ id: 'recJaneEv', fields: { Key: 'ev-jane-1', Candidate: ['recJane'] } }],
-    Roles: [{ id: 'recRole', fields: { Key: 'role-arootah', Title: 'AI Product Engineer' } }],
+    Roles: [
+      // Written before the Key was candidate-scoped: no Candidate link, and both applicants' Results
+      // hang off it. Deleting one applicant must NOT take it, or the survivor loses their report.
+      { id: 'recRole', fields: { Key: 'role-arootah', Title: 'AI Product Engineer' } },
+      // Jane's own, written since. This one goes with her.
+      { id: 'recJaneRole', fields: { Key: 'candidate-jane-role-northwind', Title: 'Engineer', Candidate: ['recJane'] } },
+    ],
     Results: [
       ...janeResults,
       {
@@ -311,11 +327,14 @@ describe('AirtableStore.deleteCandidate', () => {
     expect(byTable('Projects')).toEqual(['recJaneProj']);
     expect(byTable('Candidates')).toEqual(['recJane']);
 
-    // Global vocabulary. Deleting an applicant must never reach for either.
+    // Global vocabulary. Deleting an applicant must never reach for it.
     expect(byTable('Technologies')).toEqual([]);
-    expect(byTable('Roles')).toEqual([]);
     expect(base['Technologies']).toHaveLength(1);
-    expect(base['Roles']).toHaveLength(1);
+
+    // Her own fit report goes; the pre-scoping row both applicants share stays, because taking it
+    // would destroy the seed candidate's report to clean up hers.
+    expect(byTable('Roles')).toEqual(['recJaneRole']);
+    expect(base['Roles']?.map((r) => r.id)).toEqual(['recRole']);
 
     // The seed candidate's rows, including their Results row on the shared posting, are all still there.
     expect(base['Results']?.map((r) => r.id)).toEqual(['recJoelRes']);

@@ -8,16 +8,6 @@ Interface, shared as a link that opens with no login. This repo holds everything
 extraction and scoring pipeline, the n8n workflows that run it, the React app that writes to it, and
 the scripts that build the base itself from one access token.
 
-**See the delivered record:**
-[the fit report in Airtable](https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC) — real rows,
-written by this pipeline, no account needed. One posting scored against one applicant: sixteen
-requirements, each with its verdict, its rationale and the receipts behind it.
-
-**And the running demo:** [proof.viralhostdigital.com](https://proof.viralhostdigital.com) — paste a
-resume or a posting and watch it score. The hosted build runs the whole pipeline in the browser so it
-needs no accounts, which means it uses its own bundled store rather than the Airtable base above. The
-Airtable and n8n lanes need credentials and are covered under [Going live](#going-live).
-
 The seat is the recruiter's. Paste an applicant's resume and every claim lands unverified, because a
 resume asserts and does not prove. Ingest the applicant's supporting documents and the claims they
 back earn receipts. Score any applicant against any posting and every verdict cites the rows behind
@@ -101,8 +91,8 @@ static build has no process to hold the token.
 To create the Airtable base:
 
 ```bash
-pnpm airtable:provision   # 7 tables and 13 link fields, from one token
-pnpm airtable:push        # 1 candidate, 7 projects, 44 technologies, 22 capabilities, 23 evidence rows
+pnpm airtable:provision   # 7 tables and 14 link fields, from one token
+pnpm airtable:push        # 1 candidate, 7 projects, 44 technologies, 23 capabilities, 24 evidence rows
 ```
 
 Provisioning needs a token with `schema.bases:write` and a workspace id. Both are idempotent, so a run
@@ -157,18 +147,31 @@ Code node that fails closed, and both take an optional `candidateId` defaulting 
 candidate. Every row they write carries its Candidate link, and Results keys lead with the candidate,
 the same shapes `src/store/airtable.ts` writes.
 
-`extract-project.json` has 25 nodes. Webhook, token gate, build request, OpenRouter call, deterministic
+`extract-project.json` has 26 nodes. Webhook, token gate, build request, OpenRouter call, deterministic
 validation, then a branch: valid records go to dedup and three Airtable writes, invalid ones become a
 row in Needs Review with the validator's problem list attached.
 
-`match-role.json` has 22 nodes. The one to read is `Retrieve and score`, a Code node that ranks Airtable
-rows and computes every verdict and the coverage number in arithmetic. Only after that is a model asked to
-describe each outcome in one sentence, from the rows retrieval returned. It receives no access to the base,
-so it cannot cite a project that did not match. `tests/workflow.test.ts` asserts the scoring node contains
-no HTTP call and that it runs before the rationale node.
+`match-role.json` has 33 nodes and runs the same five stages the app does: read the posting in code and
+only call a model if it is prose, embed the record for hybrid retrieval, score in arithmetic, weigh the
+result with a model that can lower a verdict but never raise one, then write one sentence per requirement
+from the rows retrieval returned.
+
+The one to read is `Retrieve and score`, a Code node that computes every verdict and the coverage number
+before any model sees the result. The rationale model gets no access to the base, so it cannot cite a
+project that did not match. `tests/workflow.test.ts` asserts the scoring node contains no HTTP call and
+runs before the rationale node.
+
+Neither workflow contains a copy of a scoring rule. `src/pipeline/portable.ts` holds every rule both
+lanes run, and `n8n/build.ts` type-strips it into the Code nodes, so a workflow contains the rule rather
+than a transcription of it. `tests/workflow-parity.test.ts` lifts the JavaScript back out of the
+committed JSON and compares its answers to the app's own functions; `tests/workflow-rationale.test.ts`
+executes whole nodes against stubbed n8n globals. The drift check alone cannot see this, because it
+compares committed JSON to what the generator regenerates.
 
 `tests/workflow.test.ts` also parses every Code node with `new Function` to catch a syntax error before
-someone imports the canvas.
+someone imports the canvas, and pins the three runtime facts that cost the most to learn: a webhook node
+needs a `webhookId` or it has no production URL, an Airtable node below typeVersion 2.2 flattens `fields`
+to the top level, and a node with two inbound connections runs before both have delivered.
 
 ## Model tiering
 
@@ -209,7 +212,7 @@ when a caller supplies an override that is not already in the chain.
 ## Tests
 
 ```bash
-pnpm test        # 282 passing, 3 skipped, 17 files
+pnpm test        # 439 passing, 3 skipped, 19 files
 pnpm typecheck
 pnpm verify      # typecheck, tests, and the workflow drift check
 ```
@@ -237,6 +240,7 @@ and misses capabilities a posting only describes. The header says `lexical` when
 
 There is no notification step. Zapier was evaluated for one and cut: n8n already has the trigger, the
 branching and the code nodes, so a second automation tool would have been a logo rather than a feature.
+Nothing in the pipeline sends a message when a role is scored.
 
 The bundled posting in `src/ui/sample-posting.ts` keeps a real posting's requirement bullets word for
 word and nothing else. The company is Northwind Systems, which does not exist, and the "About" blurb is
@@ -267,4 +271,5 @@ src/store/       types, seed, local adapter, Airtable adapter, mode detection
 src/ui/          applicants, score, fit report, record browser
 n8n/          two workflows plus the generator that writes them
 airtable/     schema, provisioning, seeding, the view and Interface scripts
+docs/DESIGN.md   the end-to-end design, including what was cut
 ```

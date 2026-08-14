@@ -168,7 +168,11 @@ export const TABLES: TableSpec[] = [
   },
   {
     name: 'Roles',
-    description: 'Pasted job descriptions. One row per posting scored against the record.',
+    // One row per FIT REPORT — candidate x posting — not one per posting. Score and Requirement Count
+    // describe a single applicant, and the Key used to carry no candidate at all, so two people scored
+    // against the same posting on the same day shared a row: Score last-writer-wins, both sets of
+    // Results linked to it, and the rollups in VIEWS.md counting 32 against a Requirement Count of 16.
+    description: 'A posting scored against one candidate. One row per candidate per posting.',
     fields: [
       { name: 'Title', type: 'singleLineText' },
       KEY_FIELD,
@@ -239,6 +243,15 @@ export const LINKS: LinkSpec[] = [
     field: 'Candidate',
     linkedTable: 'Candidates',
     description: 'One row per candidate per role per requirement. The Key leads with the candidate.',
+  },
+  {
+    table: 'Roles',
+    field: 'Candidate',
+    linkedTable: 'Candidates',
+    description:
+      'Whose fit report this row is. Added because the recruiter surface needed it: the shared view ' +
+      'filters on Role alone, so without a candidate on the row itself two applicants appear under one ' +
+      'name. The Key is candidate-scoped too — this link is what makes that visible in the base.',
   },
 
   { table: 'Projects', field: 'Technologies', linkedTable: 'Technologies' },

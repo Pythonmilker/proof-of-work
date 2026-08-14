@@ -185,7 +185,7 @@ const evidence: Evidence[] = [
   // becomes a garbled sentence in front of a reader, and the 6/5/1 breakdown was interesting to write
   // and worth nothing to a recruiter. "each one stating how it is enforced" is true of all seven —
   // six name a test file, the seventh names the mode banner — and has nothing left to garble.
-  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', value: 'CLAUDE.md pins 7 non-negotiables, 6 of them naming the test file that enforces the rule; .claude/ carries committed launch and settings config', url: null, verifiedOn: '2026-08-05', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  { id: 'ev-pow-claude-code', label: 'Claude Code operating contract', kind: 'artifact', value: 'CLAUDE.md pins 8 non-negotiables, 7 of them naming the test file that enforces the rule; .claude/ carries committed launch and settings config', url: null, verifiedOn: '2026-08-13', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -597,12 +597,15 @@ const projects: Project[] = [
     status: 'shipped',
     summary:
       'This system. Ingests messy evidence into a receipt-backed capability record and scores it against a pasted job description. Airtable is the database, two n8n workflows are the backend, and every verdict is computed in code before a model writes a word about it.',
-    // Counted 2026-08-05 with `git ls-files '*.ts' '*.tsx' | xargs wc -l`, comments and blanks
+    // Re-counted 2026-08-13, after the n8n lane gained the deterministic posting read, the weighing
+    // pass and dense retrieval. The previous figure (16,171 / 58, counted 2026-08-05) drifted past the
+    // tolerance band, which is what that band is for — the test says so in its own comment.
+    // Counted with `git ls-files '*.ts' '*.tsx' | xargs wc -l`, comments and blanks
     // included, which is the same method the other rows use. Deliberately no `tests` and no
     // `commits`: both describe this repository from inside it, so both go stale the moment anyone
     // adds a test or makes a commit. tests/seed-integrity.test.ts re-counts loc and files on every
     // run and fails outside a tolerance band.
-    metrics: { loc: 16_171, files: 58 },
+    metrics: { loc: 18_652, files: 59 },
     technologies: ['react', 'typescript', 'vite', 'airtable', 'n8n', 'openrouter', 'claude-api', 'vitest', 'nodejs', 'rest-api'],
     capabilities: ['cap-airtable-backend', 'cap-n8n-automation', 'cap-structured-output', 'cap-llm-integration', 'cap-rag', 'cap-frontend', 'cap-documentation', 'cap-claude-code'],
     evidence: ['ev-pow-airtable', 'ev-pow-n8n', 'ev-pow-claude-code'],

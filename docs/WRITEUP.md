@@ -104,6 +104,8 @@ and misses capabilities a posting only describes.
 There is no notification step. Zapier was evaluated for one and cut; n8n carries the whole pipeline.
 
 Eleven screenshots are committed; the three that need live n8n and Airtable accounts are not.
+The committed screenshot set predates the v3 tab names, so the
+app shots want a reshoot.
 
 ## Numbers
 

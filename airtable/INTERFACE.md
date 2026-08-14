@@ -38,17 +38,17 @@ fields, which embeds a real list whose fields, sort and filter are configurable.
 3. **Name and date, field-driven** (hand-typed page furniture goes stale; fields recompute on every
    scoring run). In the **Data** tab, on **Roles**, add two fields:
 
-   - `Applicant` — type **Rollup**: linked field `Results`, field to roll up `Candidate`,
-     aggregation:
+   - `Applicant` — the `Candidate` link **on the Roles row itself**. Nothing to add: the provisioning
+     script creates it.
 
-     ```
-     ARRAYJOIN(ARRAYUNIQUE(values), ", ")
-     ```
-
-     v3 note: this replaced an earlier constant-formula plan (`"Joel Brannan"`). The base is
-     multi-candidate now and Roles are global, so the name flows from the Results rows' Candidate
-     links — and if two applicants ever score the same posting, the field says so instead of lying.
-     If a constant `Candidate` field from the earlier script exists, delete it in favour of this.
+     History, because a base built from the earlier script still has the workaround. This was a rollup
+     over `Results.Candidate` with `ARRAYJOIN(ARRAYUNIQUE(values), ", ")`, which existed because a
+     Roles row was then a POSTING with no candidate of its own — so the only way to name the applicant
+     was to ask the Results rows. That workaround half-worked and half-hid the real defect: it reported
+     two names when two applicants shared a row, while `Verdict Summary` and the embedded Results list
+     went on presenting both people's numbers as one person's. The Roles key is candidate-scoped now
+     and the row carries its own `Candidate`, so one row means one applicant. If the old rollup exists,
+     delete it and use the link.
    - `Scored On` — type **Formula**:
 
      ```
@@ -92,5 +92,5 @@ Same interface, add a page → **Dashboard** layout, source **Projects**.
 
 1. `VIEWS.md` §A fields (10 min) → §B shared view + incognito test (10 min) → §C operator views (3 min)
 2. This file: page 1 (45 min), page 2 (15 min)
-3. Tell Claude the incognito test result and paste the share link into `.env.local` — the React app's
+3. Paste the share link into `.env.local` as `VITE_AIRTABLE_REPORT_URL` — the React app's
    "Open the fit report ↗" button reads it.

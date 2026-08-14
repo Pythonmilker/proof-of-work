@@ -46,6 +46,14 @@ All three: Type **Rollup** · linked field `Results` · rollup field `Status` ·
 `COUNTALL(values)` · **with a condition** ("Only include linked records from the Results table that
 meet certain conditions"):
 
+> **A Roles row is one candidate's fit report, not a posting.** Its `Key` leads with the candidate and
+> it carries a `Candidate` link of its own, so these rollups count one applicant. That was not always
+> true: the key used to be `role-<slug>-<date>` with nobody's name in it, so two applicants scored
+> against the same posting on the same day shared a row — the rollups then counted 32 Results against a
+> `Requirement Count` of 16 and A5 rendered "Meets 20 of 16 requirements in full". If your base predates
+> that fix, a row with results from two people will still read that way; re-score each applicant and
+> delete the shared row.
+
 | Field name | Condition |
 |---|---|
 | `# Proven` | Status is proven |
@@ -81,7 +89,9 @@ Fit report — Joel Brannan × Arootah
 
 (Your name is deliberately in the view title; it is the only place the shared grid shows it.)
 
-1. **Filter:** `Role` `is` the Arootah posting record.
+1. **Filter:** `Role` `is` the Arootah posting record — which now names one applicant, so this single
+   filter is enough. Before the Roles key was candidate-scoped it was not: the view listed every
+   applicant scored against that posting, interleaved, under the one name in the view title.
 2. **Group:** by `Kind` — drag **required** above **preferred**.
 3. **Sort** inside groups: by the raw `Status` field, **Z→A** — plain words sort deterministically
    (proven → partial → gap), where emoji ordering is collation roulette. A hidden field can still
@@ -114,7 +124,8 @@ Open the link in a private window (logged out):
 - [ ] No login prompt, loads straight to the grid
 - [ ] Group counts visible (the 10 · 4 · 2 tally)
 - [ ] Expand a row: only the six visible fields appear — **if hidden fields leak into the expanded
-      record, stop and tell Claude; the share settings need a different approach**
+      record, stop: the share settings need a different approach, and a link that exposes more than
+      the six columns should not be sent to anyone**
 - [ ] Click an evidence URL from the rollup text: opens the Store listing / live site
 - [ ] Colours render for the anonymous viewer
 

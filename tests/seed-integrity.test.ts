@@ -50,7 +50,7 @@ const TRUTH = {
    * stale the moment anyone adds a test or makes a commit — the receipt said "278 tests" until the
    * tests added to stop it drifting made it 282, which is the trap demonstrating itself.
    */
-  proofOfWork: { loc: 16_171, files: 58, nonNegotiables: 7, rulesWithTests: 6, distinctTestFiles: 5 },
+  proofOfWork: { loc: 18_652, files: 59, nonNegotiables: 8, rulesWithTests: 7, distinctTestFiles: 7 },
 } as const;
 
 function project(id: string) {
@@ -308,8 +308,8 @@ describe('the Claude Code receipt describes this repository accurately', () => {
     // compress becomes a garbled sentence in front of a reader.
     //
     // The other two counts stay asserted above, where they make "each one stating how it is enforced"
-    // a checked claim rather than a pleasant one: six rules name a test file, the seventh names the
-    // mode banner, and six plus one accounts for all seven.
+    // a checked claim rather than a pleasant one: seven rules name a test file, the eighth names the
+    // mode banner, and seven plus one accounts for all eight.
     expect(claudeCode().value).toContain(`${TRUTH.proofOfWork.nonNegotiables} non-negotiables`);
     expect(withTest.length + 1, 'every rule accounted for').toBe(TRUTH.proofOfWork.nonNegotiables);
   });

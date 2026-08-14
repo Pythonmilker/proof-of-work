@@ -36,7 +36,7 @@ import { findDuplicate, linkCapabilities, linkTechnologies, mergeProject } from 
 import { templateRationale, writeRationale, type RationaleContext } from './rationale';
 import { parseResume } from './resume';
 import { coverage, gaps, resolve, worseOf, type Coverage, type Gap, type Resolution } from './score';
-import { containsTerm, normalize } from './text';
+import { containsTerm, normalize, scopedKey } from './portable';
 import { slugify, toProject, toReviewStub, validateExtraction } from './validate';
 
 export type StageState = 'ok' | 'skipped' | 'failed';
@@ -136,7 +136,9 @@ export async function ingest(
   const validation = validateExtraction(extraction.raw);
   if (!validation.ok) {
     // The error branch. A rejection becomes a visible row, not a log line — see DESIGN.md §5.3.
-    const stub = { ...toReviewStub(sourceName, validation.problems, { source: sourceName, ingestedAt }), candidate: candidateId };
+    // candidateId reaches toReviewStub so the KEY is scoped too, not just the stamp. It used to set
+    // only `candidate`, leaving every applicant's failed ingest on one shared 'unparsed-pasted-input'.
+    const stub = toReviewStub(sourceName, validation.problems, { source: sourceName, ingestedAt }, candidateId);
     await store.upsertProject(stub);
     stages.push({
       stage: 'validate',
@@ -696,7 +698,16 @@ export async function matchRole(
   const gapList = gaps(parsed.role.requirements, results, resolutions, snapshot);
 
   const role: Role = {
-    id: `role-${slugify(parsed.role.company || parsed.role.title)}-${matchedAt.slice(0, 10)}`,
+    // Scoped to the candidate. A Roles row is a FIT REPORT, not a posting — its Score and Requirement
+    // Count describe one applicant — and the key carried no candidate, so two applicants scored against
+    // the same posting on the same day landed on one row. `scopedKey` in ./portable.ts; the seed
+    // candidate keeps the plain key the fixtures know.
+    id: scopedKey(
+      candidateId,
+      `role-${slugify(parsed.role.company || parsed.role.title)}-${matchedAt.slice(0, 10)}`,
+      DEFAULT_CANDIDATE_ID,
+    ),
+    candidate: candidateId,
     title: parsed.role.title,
     company: parsed.role.company,
     postedText,

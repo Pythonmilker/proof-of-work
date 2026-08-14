@@ -289,6 +289,9 @@ export class AirtableStore implements Store {
 
         return {
           id: roleKey,
+          // From the row's own link, falling back to whoever its Results name — a base written before
+          // Roles.Candidate existed still reads correctly rather than reporting an empty owner.
+          candidate: links(r.fields, 'Candidate')[0] ?? roleResults[0]?.candidate ?? DEFAULT_CANDIDATE_ID,
           title: str(r.fields, 'Title'),
           company: str(r.fields, 'Company'),
           postedText: str(r.fields, 'Posted Text'),
@@ -419,6 +422,10 @@ export class AirtableStore implements Store {
    */
   async saveRole(role: Role): Promise<void> {
     await this.upsertByKey(TABLES.roles, role.id, {
+      // Whose report this is. Without it the shared view — which filters on Role and nothing else —
+      // cannot tell two applicants apart, and the Interface page needed an ARRAYJOIN over the Results
+      // link to say something the row itself should have carried.
+      Candidate: this.refs([role.candidate]),
       Title: role.title,
       Company: role.company,
       'Posted Text': role.postedText,
@@ -458,9 +465,10 @@ export class AirtableStore implements Store {
    * what builds the slug → record id map these deletes are addressed by, and what proves the candidate
    * exists before anything is destroyed.
    *
-   * Technologies and Roles are never in the delete list. A Technology row is global vocabulary and a
-   * Roles row is a posting anyone can be scored against — what goes is this candidate's Results rows
-   * for it. Airtable maintains the reverse side of every link itself, so unlike the local store there
+   * Technologies are never in the delete list: a Technology row is global vocabulary. Roles ARE, now
+   * that a Roles row is one candidate's fit report rather than a posting anyone shares — leaving them
+   * behind would strand a scored row naming someone the base no longer holds.
+   * Airtable maintains the reverse side of every link itself, so unlike the local store there
    * is no dangling-reference sweep to do: deleting a Project removes it from the Technologies that
    * cited it.
    */
@@ -474,6 +482,9 @@ export class AirtableStore implements Store {
     // leaves a candidate holding fewer rows reads better than one that leaves orphans holding a link
     // to a candidate who is gone.
     await this.deleteByKeys(TABLES.results, owned.results);
+    // Roles after Results: a Results row links to its Role, and removing the Role first would leave
+    // the link resolving to nothing for however long the two calls are apart.
+    await this.deleteByKeys(TABLES.roles, owned.roles);
     await this.deleteByKeys(TABLES.evidence, owned.evidence);
     await this.deleteByKeys(TABLES.capabilities, owned.capabilities);
     await this.deleteByKeys(TABLES.projects, owned.projects);

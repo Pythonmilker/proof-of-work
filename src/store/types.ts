@@ -206,6 +206,14 @@ export interface RequirementResult {
 
 export interface Role extends Provenance {
   id: string;
+  /**
+   * Whose fit report this is.
+   *
+   * A Roles row is candidate x posting, not a posting: `score` and `requirements` describe one
+   * applicant. The id used to carry no candidate, so two applicants scored against the same posting on
+   * the same day collided on one row.
+   */
+  candidate: string;
   title: string;
   company: string;
   /** The pasted job description, kept verbatim so a result can always be re-derived. */
@@ -269,6 +277,8 @@ export interface OwnedRows {
   evidence: string[];
   /** Results row keys, `{candidateKey}-{roleKey}-req-N`, across every role. */
   results: string[];
+  /** Roles row keys. A Roles row is one candidate's fit report, so it goes with them. */
+  roles: string[];
 }
 
 export function ownedRows(snapshot: Snapshot, candidateId: string): OwnedRows {
@@ -276,6 +286,18 @@ export function ownedRows(snapshot: Snapshot, candidateId: string): OwnedRows {
     projects: snapshot.projects.filter((p) => p.candidate === candidateId).map((p) => p.id),
     capabilities: snapshot.capabilities.filter((c) => c.candidate === candidateId).map((c) => c.id),
     evidence: snapshot.evidence.filter((e) => e.candidate === candidateId).map((e) => e.id),
+    // A Roles row is this candidate's fit report — its key is candidate-scoped and its Score describes
+    // one applicant — so it goes with them rather than being stranded naming someone the base no longer
+    // holds.
+    //
+    // Conservative on purpose. A row written BEFORE the key was scoped can carry two applicants'
+    // Results, and deleting it would destroy the survivor's report to clean up the leaver's. So a role
+    // is only owned when nobody else has results on it; otherwise the Results filter alone does the
+    // work, which is exactly what happened before this list existed.
+    roles: snapshot.roles
+      .filter((r) => r.candidate === candidateId)
+      .filter((r) => r.results.every((row) => row.candidate === candidateId))
+      .map((r) => r.id),
     results: snapshot.roles.flatMap((role) =>
       role.results
         .filter((r) => r.candidate === candidateId)

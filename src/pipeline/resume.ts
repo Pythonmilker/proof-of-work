@@ -13,7 +13,7 @@
 
 import { callJson, shortReason, type LlmOptions } from '../openrouter/client';
 import { RESUME_PARSE_SCHEMA } from '../openrouter/schemas';
-import { normalize } from './text';
+import { normalize } from './portable';
 
 export const RESUME_SYSTEM = `You read one resume and record what it actually says. You are filling in a
 claim sheet, not assessing a person.

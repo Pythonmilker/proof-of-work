@@ -187,7 +187,13 @@ export async function health(): Promise<Health> {
           mode: {
             store: 'airtable',
             llm: { state: 'ready', detail: payload.detail },
-            embeddings: { state: 'ready', detail: 'Handled inside the workflow' },
+            // True as of the retrieval port: `Build embed request` / `Collect vectors` run inside
+            // match-role and the scorer takes max(lexical, dense). It was NOT true before — the
+            // workflow had no embeddings call at all while this line said it did, so a semantic match
+            // the app scored as coverage was written to Airtable as a gap with nothing reporting it.
+            // Each run now returns its own `retrieval` field, which is the honest per-run answer this
+            // static line cannot be.
+            embeddings: { state: 'ready', detail: 'Embedded inside the workflow; each run reports its mode' },
             airtable: { state: 'ready', detail: 'Written by the workflow' },
             label: 'live · n8n · Airtable',
           },
@@ -323,9 +329,19 @@ export type MatchOutcome =
 
 export async function ingest(blob: string, sourceName: string, candidateId?: string): Promise<IngestOutcome> {
   if (resolved === 'n8n') {
-    // Through the proxy — the token is attached server-side. The workflow writes to the seed
-    // candidate's record; per-candidate routing inside n8n is not built, and saying so beats hiding it.
-    return { kind: 'live', summary: await post<LiveIngestSummary>(PROXY_EXTRACT, { blob, sourceName }) };
+    // Through the proxy — the token is attached server-side, and the applicant travels with the request.
+    // Dropping `candidateId` here used to send every ingest to the seeded candidate no matter who was
+    // selected, silently: the workflow's own default is the seed, so a mis-attributed write looked
+    // exactly like a correct one. The workflow rejects an id it does not know, so a wrong id now fails
+    // loudly rather than writing another applicant's project onto Joel's record.
+    return {
+      kind: 'live',
+      summary: await post<LiveIngestSummary>(PROXY_EXTRACT, {
+        blob,
+        sourceName,
+        ...(candidateId ? { candidateId } : {}),
+      }),
+    };
   }
   if (resolved === 'server') {
     return { kind: 'full', result: await post<IngestResult>('/api/ingest', { blob, sourceName, candidateId }) };
@@ -359,8 +375,15 @@ export async function ingestResume(text: string, sourceName: string): Promise<Re
 
 export async function match(text: string, candidateId?: string): Promise<MatchOutcome> {
   if (resolved === 'n8n') {
-    // Through the proxy; the workflow scores the seed candidate's record in Airtable.
-    return { kind: 'live', summary: await post<LiveMatchSummary>(PROXY_MATCH, { text }) };
+    // Through the proxy, scoped to the applicant the recruiter picked. See `ingest` above: omitting this
+    // scored the seeded candidate against every posting while the UI named someone else.
+    return {
+      kind: 'live',
+      summary: await post<LiveMatchSummary>(PROXY_MATCH, {
+        text,
+        ...(candidateId ? { candidateId } : {}),
+      }),
+    };
   }
   if (resolved === 'server') {
     return { kind: 'full', report: await post<MatchReport>('/api/match', { text, candidateId }) };

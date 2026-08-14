@@ -78,6 +78,7 @@ const MAPPING: Record<string, Record<string, string | null>> = {
   },
   Roles: {
     id: 'Key',
+    candidate: 'Candidate',
     title: 'Title',
     company: 'Company',
     postedText: 'Posted Text',
@@ -140,6 +141,10 @@ const REVERSE_ONLY = new Set([
   'Projects.Results',
   'Evidence.Results',
   'Candidates.Results',
+  // The reverse of Roles.Candidate. A Roles row names its candidate because the recruiter surface
+  // needs it on the row; nothing ever asks a candidate for their roles — the report is read from the
+  // Role down, same as the Results links above.
+  'Candidates.Roles',
 ]);
 
 /**
