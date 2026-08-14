@@ -8,6 +8,16 @@ Interface, shared as a link that opens with no login. This repo holds everything
 extraction and scoring pipeline, the n8n workflows that run it, the React app that writes to it, and
 the scripts that build the base itself from one access token.
 
+**See the delivered record:**
+[the fit report in Airtable](https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC) — real rows,
+written by this pipeline, no account needed. One posting scored against one applicant: sixteen
+requirements, each with its verdict, its rationale and the receipts behind it.
+
+**And the running demo:** [proof.viralhostdigital.com](https://proof.viralhostdigital.com) — paste a
+resume or a posting and watch it score. The hosted build runs the whole pipeline in the browser so it
+needs no accounts, which means it uses its own bundled store rather than the Airtable base above. The
+Airtable and n8n lanes need credentials and are covered under [Going live](#going-live).
+
 The seat is the recruiter's. Paste an applicant's resume and every claim lands unverified, because a
 resume asserts and does not prove. Ingest the applicant's supporting documents and the claims they
 back earn receipts. Score any applicant against any posting and every verdict cites the rows behind
