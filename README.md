@@ -16,7 +16,7 @@ the way a CRM demo ships with sample contacts.
 
 ## Requirements
 
-**Node 20.19** or newer (Vite 7 requires it) and pnpm. No API keys, no accounts.
+**Node 24** or newer and pnpm 11 (pnpm 11 itself needs Node 22.13, so the older 20.19 floor could no longer install). No API keys, no accounts.
 
 ## Run it
 
