@@ -1,0 +1,3 @@
+# Reviewed 2026-09-05: files that look like credentials by name but hold none.
+# .env.production carries one public relay ADDRESS (VITE_ prefix, compiled into client code); its own header says why.
+.env.production
