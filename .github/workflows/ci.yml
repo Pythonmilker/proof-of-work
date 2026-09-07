@@ -23,8 +23,7 @@ concurrency:
 jobs:
   checks:
     uses: Pythonmilker/ci/.github/workflows/verify.yml@main
-    with:
-      node-version: '24'
+    # the Node floor comes from this repo's engines.node (24 when generated), never from here
 
   gate:
     runs-on: ubuntu-latest
