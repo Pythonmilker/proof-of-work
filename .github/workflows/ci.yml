@@ -2,10 +2,12 @@
 # workspace umbrella; edit the table there and re-run rather than hand-editing this file.
 # packageManager repinned from pnpm 11.13.0 (a release pnpm itself refuses to install) to 11.22.0, which needs Node 22.13, so the README floor moved to 24.
 #
-# checks: the repo's own executable checks, frozen install. review: Anthropic's claude-code-action runs the
+# checks: the shared reusable workflow (Pythonmilker/ci) — frozen install, the repo's own verify ladder,
+# credential-free by assertion. review: Anthropic's claude-code-action runs the
 # code-review plugin on every non-draft pull request and posts one inline comment per finding. It never
 # blocks a merge; branch protection decides that. Auth is CLAUDE_CODE_OAUTH_TOKEN (claude setup-token),
-# which bills to the Max plan and is tied to the account that generated it.
+# which bills to the Max plan and is tied to the account that generated it. Without that secret the
+# review job skips and says so; it never fails a pull request over a missing secret.
 name: ci
 
 on:
@@ -20,24 +22,24 @@ concurrency:
 
 jobs:
   checks:
+    uses: Pythonmilker/ci/.github/workflows/verify.yml@main
+    with:
+      node-version: '24'
+
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    outputs:
+      run: ${{ steps.check.outputs.run }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-      # pnpm before setup-node so the cache has a package manager to find; the version comes from
-      # the packageManager field in package.json, so CI and the workstation run one pnpm.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm verify
+      - id: check
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; echo "CLAUDE_CODE_OAUTH_TOKEN not set; pull-request review skipped"; fi
 
   review:
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    needs: gate
+    if: needs.gate.outputs.run == 'true' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
