@@ -1046,7 +1046,8 @@ The achievable form, stated precisely:
    the client but by making the client worthless to an attacker — the same reason the shared view
    link is safe to put on a resume.
 5. **Distribution posture:** recruiters receive surfaces (the shared view, a hosted app URL), never
-   the repository. The repo has no remote by deliberate choice.
+   the repository. This release has a public remote (`github.com/Pythonmilker/proof-of-work`); the
+   source repository stays private.
 
 ## v3.8 Weighing (2026-08-05)
 
