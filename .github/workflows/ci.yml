@@ -2,8 +2,9 @@
 # workspace umbrella; edit the table there and re-run rather than hand-editing this file.
 # packageManager repinned from pnpm 11.13.0 (a release pnpm itself refuses to install) to 11.22.0, which needs Node 22.13, so the README floor moved to 24.
 #
-# checks: the shared reusable workflow (Pythonmilker/ci) — frozen install, the repo's own verify ladder,
-# credential-free by assertion. review: Anthropic's claude-code-action runs the
+# checks: an inline copy of the shared ladder (Pythonmilker/ci is private and GitHub does not let a
+# public repository call a reusable workflow in a private one); same steps, same order.
+# review: Anthropic's claude-code-action runs the
 # code-review plugin on every non-draft pull request and posts one inline comment per finding. It never
 # blocks a merge; branch protection decides that. Auth is CLAUDE_CODE_OAUTH_TOKEN (claude setup-token),
 # which bills to the Max plan and is tied to the account that generated it. Without that secret the
@@ -22,8 +23,107 @@ concurrency:
 
 jobs:
   checks:
-    uses: Pythonmilker/ci/.github/workflows/verify.yml@main
-    # the Node floor comes from this repo's engines.node (24 when generated), never from here
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      # Fails the run if a credential is present, and never prints a value -- only the name.
+      # These repos advertise a keyless path; a green run that quietly needed a key would prove
+      # the opposite of what it appears to prove.
+      - name: Assert the job has no credentials
+        env:
+          FORBIDDEN: >-
+            OPENROUTER_API_KEY AIRTABLE_API_KEY AIRTABLE_TOKEN AIRTABLE_PAT
+            POW_APP_TOKEN ANTHROPIC_API_KEY OPENAI_API_KEY LIVE_OPENROUTER
+        run: |
+          fail=0
+          for name in $FORBIDDEN; do
+            if [ -n "$(printenv "$name" || true)" ]; then
+              echo "::error::$name is set in this job. These projects must verify credential-free; a run that needed a key proves nothing about the keyless path."
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] || exit 1
+
+      - name: Detect stack
+        id: stack
+        run: |
+          { [ -f package.json ]     && echo 'node=true'   || echo 'node=false'; }   >> "$GITHUB_OUTPUT"
+          { [ -f pnpm-lock.yaml ]   && echo 'pnpm=true'   || echo 'pnpm=false'; }   >> "$GITHUB_OUTPUT"
+
+      # jq and grep are preinstalled on ubuntu runners, so this resolves before any toolchain is
+      # set up and cannot be broken by the Node version it is choosing.
+      - name: Resolve the Node version under test
+        id: node
+        if: steps.stack.outputs.node == 'true'
+        run: |
+          resolved=$(jq -r '.engines.node // ""' package.json | grep -oE '[0-9]+(\.[0-9]+)*' | head -1)
+          origin='engines.node'
+          if [ -z "$resolved" ]; then
+            resolved='lts/*'; origin='fallback (no engines.node declared)'
+            echo "::warning::No engines.node in package.json; testing on lts/*. Declare the floor you actually support."
+          fi
+          echo "version=$resolved" >> "$GITHUB_OUTPUT"
+          echo "Node under test: $resolved (from $origin)"
+
+      # Before setup-node, so its pnpm cache has a package manager to find. No `version` input:
+      # it reads `packageManager` from package.json, keeping CI and the workstation on one pnpm.
+      - uses: pnpm/action-setup@v6
+        if: steps.stack.outputs.pnpm == 'true'
+
+      - uses: actions/setup-node@v5
+        if: steps.stack.outputs.node == 'true'
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: ${{ steps.stack.outputs.pnpm == 'true' && 'pnpm' || '' }}
+          cache-dependency-path: pnpm-lock.yaml
+
+      # Frozen: CI installs what the lockfile says or fails.
+      - name: Install (node)
+        if: steps.stack.outputs.node == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
+        run: |
+          if [ -f scripts/verify.mjs ]; then
+            node scripts/verify.mjs
+          elif jq -e '.scripts.verify' package.json >/dev/null 2>&1; then
+            pnpm verify
+          elif jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+            echo '::warning::No "verify" script -- falling back to test. Add one so this repo, not this workflow, decides what verified means.'
+            pnpm test
+          else
+            echo '::error::Nothing to verify: no scripts/verify.mjs and no verify/test script.'
+            exit 1
+          fi
+
+      # Catches a generator that writes when it should check. --porcelain lists untracked files too.
+      - name: Working tree must be unchanged
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::verify modified the working tree. A step that regenerates instead of checking passes locally and drifts in the repository."
+            git status --porcelain
+            exit 1
+          fi
+
+      - name: Explain the failure
+        if: failure()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'NOTE'
+          ### If this is not obviously your code
+
+          - **`ERR_MODULE_NOT_FOUND` / missing esbuild binary** - a package with a postinstall is
+            missing from `allowBuilds:` in `pnpm-workspace.yaml`. It is not read from `package.json`.
+          - **Syntax or type errors that pass locally** - CI runs the floor from `engines.node`,
+            which is lower than the workstation. Raise the floor or fix the code.
+          - **"Working tree must be unchanged"** - a generated file was committed stale. Regenerate
+            and commit; do not relax the check.
+          - **"Unable to resolve action"** - an action major was pinned too high. Lower it; an old
+            major still works.
+          NOTE
 
   gate:
     runs-on: ubuntu-latest
