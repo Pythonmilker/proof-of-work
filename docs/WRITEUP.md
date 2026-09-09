@@ -111,6 +111,6 @@ app shots want a reshoot.
 
 439 tests across 19 files, typecheck clean. 11,650 lines of TypeScript across 51 files, counted with
 `git ls-files "*.ts" "*.tsx" | xargs wc -l`. 1 candidate, 7 projects, 44 technologies, 22 capabilities,
-23 evidence rows, every capability evidenced. Two workflows, 47 nodes between them, verified to import
+23 evidence rows, every capability evidenced. Two workflows, 59 nodes between them, verified to import
 and round-trip in a real n8n. 12 raw artifacts committed so the before-and-after is reproducible. The
 static build ships 342 kB of JavaScript, 108 kB gzipped.
