@@ -8,6 +8,8 @@ coverage/
 !.env.example
 CLAUDE.local.md
 .claude/settings.local.json
+# Notes Claude Code's subagents keep between sessions. They stay on the machine: this repo is public.
+.claude/agent-memory/
 
 # Session state written by the local store at runtime. The seed lives in src/store/seed.ts, where the
 # compiler can check it; this file is just whatever the current session ingested.
