@@ -158,7 +158,7 @@ const evidence: Evidence[] = [
   // and a decorative row in a record whose entire argument is that its claims are backed is worse than
   // an empty one. The posting still asks for Zapier; the record does not have it, and now says so.
   { id: 'ev-pow-airtable', label: 'Airtable base as application backend', kind: 'artifact', value: '7 tables and a no-login shared fit-report view, provisioned from a single PAT via the Meta API', url: 'https://airtable.com/appbhjbhVTyt6lK3e/shrARbC3bWPPugQRC', verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
-  { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and drift-checked by pnpm verify', url: null, verifiedOn: VERIFIED, candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
+  { id: 'ev-pow-n8n', label: 'n8n workflows, version-controlled', kind: 'artifact', value: '2 workflows committed as JSON, generated from source and drift-checked by pnpm verify; the match workflow embeds the posting and the records and ranks them by cosine similarity', url: null, verifiedOn: '2026-11-03', candidate: DEFAULT_CANDIDATE_ID, projects: ['proof-of-work'] },
   // Added 2026-08-05, after the weighing pass demoted the Claude Code requirement and was right to:
   // the record had no Claude Code row at all and was matching an ALIAS on Claude API. Repo-internal
   // like ev-pow-n8n above, so it is checkable on a screen share rather than from a URL, which is the
