@@ -1,67 +1,92 @@
 # Joel Brannan
-**Cloud & Full-Stack Software Developer | AWS Certified**
+**AI Solutions Engineer · AI Solutions Architect · Cloud Architecture**
 
-Kansas City Metro, MO (Open to Remote) · joelb@viralhostdigital.com
-AWS Certified Cloud Practitioner (CLF-C02), Aug 2025 - Jul 2028
+Kansas City Metro, MO · Fully remote · joelb@viralhostdigital.com
+linkedin.com/in/joel-brannan-0558a437a · github.com/Pythonmilker · viralhostdigital.com · proof.viralhostdigital.com
 
 ---
 
 ## Summary
 
-Self-taught software developer and AWS Certified Cloud Practitioner who designs and ships production, enterprise-grade serverless systems on AWS. Founder of a web/software agency (Viral Host Digital LLC) and an independent product builder who has shipped a published Microsoft Store application. Strong in AI-assisted development, multi-provider LLM integration, and turning business problems into automated, cloud-native solutions. Comfortable owning a build end-to-end: architecture, infrastructure-as-code, backend, front end, and deployment.
-
----
-
-## Certifications
-
-- **AWS Certified Cloud Practitioner (CLF-C02)** — Amazon Web Services. Issued Aug 2025; valid through Jul 2028. (Credential ID on request / Credly badge.)
-
----
-
-## Technical Skills
-
-**AWS / Cloud:** Lambda, API Gateway (HTTP/v2), DynamoDB (single-table design), S3 (cross-region replication, versioning), CloudFront (origin-group failover, OAC, edge functions), WAF (Bot Control), Cognito, SES (inbound/outbound, DKIM/SPF/DMARC), EventBridge, CloudWatch RUM, CodeBuild (CI/CD), Route 53, ACM, Secrets Manager, SSM Parameter Store, SNS/SQS
-**Infrastructure as Code:** Terraform, AWS SAM
-**Languages:** JavaScript, TypeScript, Python, C#, SQL, HTML, CSS
-**Frameworks / Runtimes:** Node.js, React, Astro, Electron, Tailwind CSS, PixiJS, Three.js / React-Three-Fiber
-**AI / ML:** Multi-provider LLM integration (Anthropic, OpenAI, Google Gemini), Vercel AI SDK, retrieval-augmented generation (RAG), knowledge graphs, prompt engineering, AI-assisted / agentic development
-**Data / Storage:** DynamoDB, SQLite (better-sqlite3, FTS5), S3
-**Practices:** Serverless architecture, multi-tenant SaaS, CI/CD, CRM/data modeling, email deliverability, payments (Stripe), SEO / Answer-Engine Optimization, CAN-SPAM compliance
+AI solutions engineer and architect who takes business requirements through discovery, solutions architecture and deployment to production. Since July 2025 I have deployed AI agents, RAG, API integrations and workflow automation on Anthropic, OpenAI and Google models, working directly with non-technical stakeholders. AI-native: I build in Claude Code with an agent system I designed.
 
 ---
 
 ## Experience
 
-### Founder & Full-Stack / Cloud Developer — Viral Host Digital LLC
-*2025 – Present · Remote*
+### Founder, AI Solutions Architect — Viral Host Digital
+*Remote · Jul 2025 – Present*
 
-- Architected and deployed a production, enterprise-grade **serverless platform on AWS**, fully provisioned with **Terraform** (14+ modules): multi-region **S3 cross-region replication** with **CloudFront origin-group failover**, **WAF** with AWS Bot Control, **API Gateway** fronting ~9 **Lambda** microservices, and automated **CodeBuild** CI/CD (build → S3 sync → CloudFront invalidation).
-- Designed a **multi-tenant client portal and CRM** on a **DynamoDB** single-table model — contacts, deals, pipelines, automation rules, lead scoring, activity/audit logging — with **Cognito** authentication and role/tenant scoping.
-- Built an inbound/outbound **Amazon SES** email pipeline (SES → S3 → Lambda) with DKIM, SPF/DMARC, custom MAIL FROM, and bounce/complaint handling via SNS.
-- Integrated **Google Gemini**-powered AI chatbots and **Stripe** billing into the platform.
-- Built **VHD Outreach**, an automated cold-email outreach engine (**Brevo + AWS SES + Lambda + EventBridge**) with multi-step sequences, daily send caps, suppression, working unsubscribe / CAN-SPAM footer, and per-prospect personalized review pages served behind CloudFront.
-- Delivered client websites on **Astro + React** (e.g., Dewdrop Carpet Cleaning) with reCAPTCHA-protected lead forms and ~25 programmatic **SEO / AEO** landing pages.
+- Run AI and cloud consulting with full ownership of pre-sales, discovery, scoping, roadmap, implementation and documentation.
+- Designed and operate a serverless AWS platform in production: 212 Terraform resources, S3 replication across regions, CloudFront failover for reliability, and CodeBuild CI/CD.
+- Built a multi-tenant CRM on DynamoDB that scopes every request to the tenant ID in the user’s Cognito token.
+- Put the public LLM chat behind an origin-verify secret, WAF rules and a per-IP quota for security and cost control.
+- Shipped outreach automation on SES and Lambda with CAN-SPAM compliance, plus client sites (mywindowssparkle.com).
 
-### Independent Software Developer & Product Builder
-*2024 – Present · Remote*
+### AI Solutions Engineer — Upwork (Contract)
+*Remote · Jun 2026 – Present*
 
-- **Tendril** — Designed and shipped an **Electron desktop application** published on the **Microsoft Store** (passed store certification, June 2026). Features a multi-provider **AI proxy** (Anthropic / OpenAI / Google + bring-your-own-key), usage metering with tiered billing, and a local-first **SQLite/FTS5 knowledge-graph** engine with multi-agent orchestration.
-- **Parastoria** *(in development)* — Cross-platform **Electron + React + PixiJS** application with a local-first **SQLite** data layer, provider-agnostic AI via the **Vercel AI SDK**, and an **AWS SAM** backend (billing, realtime relay, companion sync). Targeting Microsoft Store plus iOS/Android companion.
-- **TTRPG Hub** — Python desktop app built around a **Gemini knowledge-graph RAG** system with multiple AI personas and procedural generation.
-- **Genestrata** — Unity / C# game using data-driven ScriptableObjects and a structured AI art-generation pipeline.
+- Scoped customer requirements with a non-technical client into a written spec with acceptance criteria, then delivered an embeddable AI support chatbot and a recorded demo.
+- The LLM only classifies intent through structured outputs; code answers from the store’s data. 359 tests. Rated 5.0 with zero revisions.
+
+### Owner–Operator — Dewdrop Carpet Cleaning
+*Kansas City, MO · Jun 2021 – Present*
+
+- Customer-facing owner of a local service business: sales, customer communication and service delivery.
+
+---
+
+## Projects
+
+### Claude Code Agent System
+*Multi-agent orchestration for software delivery · Sep 2026 – Present*
+
+- The repeatable delivery system I build every project with.
+- 12 custom subagents (implementer, code and security reviewers, acceptance verifier, spec auditor, researcher), each pinned to the cheapest model and effort that passed its evaluation.
+- A verify workflow runs on security-sensitive and unattended code.
+- After one unpinned review run spawned 2,106 agents (80% of a week’s agent spend), I added governance: a per-agent cost ledger and a 15-agent cap.
+
+### Parastoria
+*Tabletop RPG campaign platform, in development · parastoria.app · Jun 2026 – Present*
+
+- One renderer runs on desktop, browser and an Android prototype through a single platform-API seam.
+- Graph RAG for lore: hybrid search picks seeds, then expands along typed edges.
+- Streaming LLM proxy with usage metering, OAuth through Cognito and Stripe billing. 70k lines, 1,154 tests.
+
+### Proof of Work
+*AI hiring tool, live proof of concept · proof.viralhostdigital.com · Jul 2026*
+
+- An extraction pipeline marks every resume claim unverified until a document backs it, then deterministic code scores the applicant against any job posting.
+- The model writes explanations only after the score is fixed. n8n workflows generated from TypeScript. 439 tests.
+
+### Tendril
+*Desktop IDE for parallel AI coding agents · Microsoft Store ID 9NRC4P6JQ962 · Apr 2026 – Jun 2026*
+
+- Orchestrates AI agents in parallel in a separate git worktree, with an MCP client and server.
+- A streaming translation proxy maps a user’s Anthropic, OpenAI or Gemini key onto the Claude Agent SDK, so one runtime serves every vendor.
+- Retrieval uses a tree-sitter code graph with full-text search.
+- Passed Store certification on round 10 after Microsoft feedback moved payment to web checkout. 132k lines, 1,254 tests.
+
+---
+
+## Skills
+
+**AI solutions:** generative AI, LLM, AI agents, agentic workflows, RAG, embeddings, evals, prompt engineering, MCP
+**Models & tools:** Claude Code, Claude API, OpenAI, Gemini, n8n, Airtable, Stripe, REST APIs, webhooks
+**Cloud infrastructure:** AWS, Lambda, API Gateway, DynamoDB, S3, CloudFront, WAF, Cognito, Terraform, CI/CD
+**Tech stack:** TypeScript, JavaScript, Python, HTML/CSS, React, Node.js, Electron, Astro, Git
 
 ---
 
 ## Education
 
-- **High School Diploma** — Penn Foster
-- Ongoing self-directed study in cloud architecture, software engineering, and AI-assisted development.
+- Earning transfer credit toward a B.S. in Software Engineering (in progress)
+- IBM Generative AI Engineering Professional Certificate, Coursera, in progress (ACE-recommended, 17 credits)
+- High School Diploma · Penn Foster High School · 2014
 
 ---
 
-## Selected Highlights
+## Certifications
 
-- Passed AWS certification and shipped a Microsoft Store app as a self-taught developer.
-- Runs production AWS infrastructure defined entirely as code (Terraform / SAM).
-- Builds AI-integrated products across four different LLM providers.
-- Founder/operator: owns product, infrastructure, and go-to-market end to end.
+- AWS Certified Cloud Practitioner (CLF-C02) · Jul 2025 – Jul 2028
+- AWS Certified Solutions Architect – Associate · through Coursera · in preparation

@@ -77,20 +77,24 @@ describe('the deterministic reader on the real fixture', () => {
     }
   });
 
-  it('turns the experience headers into position stubs', () => {
-    expect(parsed.projects).toHaveLength(2);
+  it('turns the experience and project headers into position stubs', () => {
+    // Three positions under Experience, four named projects under Projects.
+    expect(parsed.projects).toHaveLength(7);
     expect(parsed.projects[0]).toMatchObject({
-      name: 'Viral Host Digital LLC',
-      role: 'Founder & Full-Stack / Cloud Developer',
+      name: 'Viral Host Digital',
+      role: 'Founder, AI Solutions Architect',
     });
-    expect(parsed.projects[1]?.name).toBe('Independent Software Developer & Product Builder');
+    expect(parsed.projects[1]).toMatchObject({ name: 'Upwork (Contract)', role: 'AI Solutions Engineer' });
+    // A project heading carries no "Role — Company" dash, so it is a name with no role.
+    expect(parsed.projects.find((p) => p.name === 'Tendril')).toMatchObject({ role: '' });
   });
 
   it('reads the experience bullets as claims and leaves the other sections alone', () => {
-    expect(parsed.claims).toHaveLength(10);
-    // Education and Selected Highlights are not experience, and their bullets are not claims.
+    expect(parsed.claims).toHaveLength(21);
+    // Summary, Education and Certifications are not experience, and their lines are not claims.
     expect(parsed.claims.some((c) => /High School Diploma/i.test(c))).toBe(false);
-    expect(parsed.claims.some((c) => /self-taught developer/i.test(c))).toBe(false);
+    expect(parsed.claims.some((c) => /Certified Cloud Practitioner/i.test(c))).toBe(false);
+    expect(parsed.claims.some((c) => /takes business requirements/i.test(c))).toBe(false);
   });
 });
 
@@ -206,9 +210,9 @@ describe('ingestResume', () => {
     for (const id of ['react', 'aws-lambda', 'terraform']) {
       expect(result.resolvedTechnologies).toContain(id);
     }
-    // Route 53 is on the resume and not in the seed taxonomy: a new row, not a dropped skill.
-    expect(result.createdTechnologies.map((t) => t.id)).toContain('route-53');
-    expect((await store.read()).technologies.some((t) => t.id === 'route-53')).toBe(true);
+    // MCP is on the resume and not in the seed taxonomy: a new row, not a dropped skill.
+    expect(result.createdTechnologies.map((t) => t.id)).toContain('mcp');
+    expect((await store.read()).technologies.some((t) => t.id === 'mcp')).toBe(true);
   });
 
   it('writes position stubs owned by the candidate, with technology links in both directions', async () => {
@@ -216,17 +220,20 @@ describe('ingestResume', () => {
     const result = await ingestResume(resumeText, '08-joel-resume.md', store, keyless);
 
     const after = await store.read();
-    const stubId = 'candidate-joel-brannan-viral-host-digital-llc';
+    const positionId = 'candidate-joel-brannan-viral-host-digital';
+    expect(result.createdProjects.map((p) => p.id)).toContain(positionId);
+    expect(after.projects.find((p) => p.id === positionId)?.role).toBe('Founder, AI Solutions Architect');
+
+    const stubId = 'candidate-joel-brannan-tendril';
     expect(result.createdProjects.map((p) => p.id)).toContain(stubId);
 
     const stub = after.projects.find((p) => p.id === stubId);
     expect(stub?.candidate).toBe('candidate-joel-brannan');
-    expect(stub?.role).toBe('Founder & Full-Stack / Cloud Developer');
     expect(stub?.evidence).toEqual([]); // a stub is a claim, not a receipt
-    expect(stub?.technologies).toContain('terraform'); // named in the stub's own words
+    expect(stub?.technologies).toContain('git'); // named in the stub's own words
 
-    const terraform = after.technologies.find((t) => t.id === 'terraform');
-    expect(terraform?.projects).toContain(stubId); // the reverse side of the same link
+    const git = after.technologies.find((t) => t.id === 'git');
+    expect(git?.projects).toContain(stubId); // the reverse side of the same link
   });
 
   it('updates rather than duplicating when the same person is ingested twice', async () => {
