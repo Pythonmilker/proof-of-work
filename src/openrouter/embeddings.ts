@@ -7,8 +7,7 @@
  * hundredth of a cent, and — the part that matters — cannot invent a capability that is not in the store,
  * because it only ever ranks rows that already exist.
  *
- * Same pattern as the sqlite-vec code knowledge graph in Tendril: embed the corpus once, embed the query,
- * rank by cosine, cut at a threshold. The storage is different and the idea is not.
+ * Embed the corpus once, embed the query, rank by cosine, cut at a threshold.
  *
  * `qwen/qwen3-embedding-8b` at $0.01 per million tokens (OpenRouter's rate, read 2026-07-27) embeds this
  * entire store for well under a cent.

@@ -83,7 +83,6 @@ const technologies: Technology[] = [
 
   // data
   { id: 'sqlite', name: 'SQLite', aliases: ['sqlite', 'better-sqlite3', 'sqlite3'], category: 'data', projects: [] },
-  { id: 'sqlite-vec', name: 'sqlite-vec', aliases: ['sqlite-vec', 'vector index', 'vector database', 'vector store'], category: 'data', projects: [] },
 
   // ai
   // 'claude code' was an alias here until 2026-08-05 and should never have been. Calling the model
@@ -230,17 +229,19 @@ const capabilities: Capability[] = [
   {
     id: 'cap-rag',
     name: 'Retrieval-augmented generation',
-    statement: 'Builds and queries a vector index so a model answers from a corpus rather than from memory.',
+    statement: 'Embeds a corpus and a query and ranks records by cosine similarity, so a model answers from retrieved records rather than from memory.',
     tier: 'proven',
     candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['rag', 'retrieval augmented generation', 'vector search', 'embeddings', 'semantic search', 'knowledge base'],
-    projects: ['tendril', 'proof-of-work'],
-    evidence: ['ev-tendril-proxy', 'ev-tendril-store'],
+    // Tendril was linked here until 2026-11-03 with its proxy and Store receipts, neither of which shows
+    // retrieval: its symbols_vec table is created and never written, so its search is FTS5 only.
+    projects: ['proof-of-work'],
+    evidence: ['ev-pow-n8n'],
   },
   {
     id: 'cap-multi-agent',
     name: 'Multi-agent orchestration',
-    statement: 'Runs parallel agents through a plan, build, audit, fix and review pipeline in isolated git worktrees.',
+    statement: 'Runs parallel agents through a plan, build, audit, fix and review pipeline in one shared git worktree kept off the user\'s branch.',
     tier: 'proven',
     candidate: DEFAULT_CANDIDATE_ID,
     matchTerms: ['multi-agent', 'agent orchestration', 'agentic', 'ai agents', 'autonomous agents'],
@@ -473,9 +474,9 @@ const projects: Project[] = [
     ended: '2026-06',
     status: 'shipped',
     summary:
-      'Agent-first Windows IDE that orchestrates parallel coding agents in isolated git worktrees, with a cross-project code knowledge graph. Bring-your-own-key across Anthropic, OpenAI and Gemini, normalised into one agent runtime.',
+      'Agent-first Windows IDE that orchestrates parallel coding agents in one shared git worktree kept off the user\'s branch, with a cross-project code knowledge graph. Bring-your-own-key across Anthropic, OpenAI and Gemini, normalised into one agent runtime.',
     metrics: { loc: 132_000, tests: 660, commits: 125 },
-    technologies: ['electron', 'react', 'typescript', 'nodejs', 'sqlite', 'sqlite-vec', 'aws-lambda', 'dynamodb', 'cognito', 'stripe', 'claude-api', 'openai-api', 'gemini', 'vitest', 'playwright', 'websocket', 'vite', 'tailwind', 'git', 'rest-api'],
+    technologies: ['electron', 'react', 'typescript', 'nodejs', 'sqlite', 'aws-lambda', 'dynamodb', 'cognito', 'stripe', 'claude-api', 'openai-api', 'gemini', 'vitest', 'playwright', 'websocket', 'vite', 'tailwind', 'git', 'rest-api'],
     capabilities: ['cap-multi-agent', 'cap-provider-agnostic', 'cap-rag', 'cap-structured-output', 'cap-llm-integration', 'cap-frontend', 'cap-billing', 'cap-e2e-testing', 'cap-desktop-packaging', 'cap-serverless', 'cap-realtime', 'cap-documentation'],
     evidence: ['ev-tendril-store', 'ev-tendril-site', 'ev-tendril-unit', 'ev-tendril-e2e', 'ev-tendril-commits', 'ev-tendril-cert', 'ev-tendril-proxy'],
     candidate: DEFAULT_CANDIDATE_ID,

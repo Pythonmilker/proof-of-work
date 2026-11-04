@@ -92,7 +92,7 @@ To create the Airtable base:
 
 ```bash
 pnpm airtable:provision   # 7 tables and 14 link fields, from one token
-pnpm airtable:push        # 1 candidate, 7 projects, 44 technologies, 23 capabilities, 24 evidence rows
+pnpm airtable:push        # 1 candidate, 7 projects, 43 technologies, 23 capabilities, 24 evidence rows
 ```
 
 Provisioning needs a token with `schema.bases:write` and a workspace id. Both are idempotent, so a run

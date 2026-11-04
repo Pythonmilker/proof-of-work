@@ -498,8 +498,7 @@ Hybrid, because postings do both things:
 - **Fallback** — no key means lexical plus token-overlap only. The UI says so; it does not pretend the
   result is equivalent.
 
-Same retrieval shape as Tendril's sqlite-vec code knowledge graph: embed the corpus, embed the query,
-rank by cosine, cut at a threshold. Different storage, same idea.
+The retrieval shape: embed the corpus, embed the query, rank by cosine, cut at a threshold.
 
 Projects are **derived, never matched directly** — a project is relevant because something in it is.
 Rows with `reviewStatus: needs-review` are excluded; a parked record is not evidence of anything yet.
